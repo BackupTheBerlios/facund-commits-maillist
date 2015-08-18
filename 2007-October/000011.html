@@ -1,0 +1,112 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r17 - trunk/lib
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r17%20-%20trunk/lib&In-Reply-To=%3C200710062258.l96MwBid028977%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000010.html">
+   <LINK REL="Next"  HREF="000015.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r17 - trunk/lib</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r17%20-%20trunk/lib&In-Reply-To=%3C200710062258.l96MwBid028977%40sheep.berlios.de%3E"
+       TITLE="r17 - trunk/lib">zxombie at users.berlios.de
+       </A><BR>
+    <I>Sun Oct  7 00:58:11 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000010.html">r16 - trunk/lib/test
+</A></li>
+        <LI>Next message: <A HREF="000015.html">r18 - trunk/lib
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#11">[ date ]</a>
+              <a href="thread.html#11">[ thread ]</a>
+              <a href="subject.html#11">[ subject ]</a>
+              <a href="author.html#11">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-10-07 00:58:01 +0200 (Sun, 07 Oct 2007)
+New Revision: 17
+
+Modified:
+   trunk/lib/facund_object.c
+   trunk/lib/facund_object.h
+Log:
+Initalise the facund_object to zero
+Add facund_object_is_assigned to tell if the object has had a value assigned yet
+
+
+Modified: trunk/lib/facund_object.c
+===================================================================
+--- trunk/lib/facund_object.c	2007-10-06 22:55:05 UTC (rev 16)
++++ trunk/lib/facund_object.c	2007-10-06 22:58:01 UTC (rev 17)
+@@ -411,6 +411,7 @@
+ 	if (obj-&gt;obj_xml_string != NULL)
+ 		free(obj-&gt;obj_xml_string);
+ 
++	memset(obj, 0, sizeof(struct facund_object));
+ 	free(obj);
+ }
+ 
+@@ -494,6 +495,12 @@
+ 	return obj-&gt;obj_type;
+ }
+ 
++int
++facund_object_is_assigned(const struct facund_object *obj)
++{
++	return obj-&gt;obj_assigned == 1;
++}
++
+ const char *
+ facund_object_xml_string(struct facund_object *obj __unused)
+ {
+
+Modified: trunk/lib/facund_object.h
+===================================================================
+--- trunk/lib/facund_object.h	2007-10-06 22:55:05 UTC (rev 16)
++++ trunk/lib/facund_object.h	2007-10-06 22:58:01 UTC (rev 17)
+@@ -81,6 +81,7 @@
+ 
+ enum facund_object_error facund_object_get_error(const struct facund_object*);
+ enum facund_type	 facund_object_get_type(const struct facund_object *);
++int			 facund_object_is_assigned(const struct facund_object*);
+ const char		*facund_object_xml_string(struct facund_object *);
+ void			 facund_object_print(struct facund_object *);
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000010.html">r16 - trunk/lib/test
+</A></li>
+	<LI>Next message: <A HREF="000015.html">r18 - trunk/lib
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#11">[ date ]</a>
+              <a href="thread.html#11">[ thread ]</a>
+              <a href="subject.html#11">[ subject ]</a>
+              <a href="author.html#11">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>

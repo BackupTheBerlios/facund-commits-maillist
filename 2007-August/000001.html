@@ -1,0 +1,281 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r7 - trunk/lib
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r7%20-%20trunk/lib&In-Reply-To=%3C200708290105.l7T15rpv008598%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000000.html">
+   <LINK REL="Next"  HREF="000002.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r7 - trunk/lib</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r7%20-%20trunk/lib&In-Reply-To=%3C200708290105.l7T15rpv008598%40sheep.berlios.de%3E"
+       TITLE="r7 - trunk/lib">zxombie at users.berlios.de
+       </A><BR>
+    <I>Wed Aug 29 03:05:53 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000000.html">r6 - trunk/lib/test
+</A></li>
+        <LI>Next message: <A HREF="000002.html">r8 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1">[ date ]</a>
+              <a href="thread.html#1">[ thread ]</a>
+              <a href="subject.html#1">[ subject ]</a>
+              <a href="author.html#1">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-08-29 03:05:47 +0200 (Wed, 29 Aug 2007)
+New Revision: 7
+
+Modified:
+   trunk/lib/facund_object.c
+Log:
+Fix all the failing facund_object tests
+
+Modified: trunk/lib/facund_object.c
+===================================================================
+--- trunk/lib/facund_object.c	2007-08-29 01:02:42 UTC (rev 6)
++++ trunk/lib/facund_object.c	2007-08-29 01:05:47 UTC (rev 7)
+@@ -86,12 +86,24 @@
+ {
+ 	struct facund_object *real_obj;
+ 
+-	/* TODO: Change these to proper checks */
+-	assert(obj != NULL);
+-	assert(obj-&gt;obj_type == FACUND_BOOL);
++	if (obj == NULL) {
++		return -1;
++	}
++
++	/* Get an object we can edit */
++	real_obj =  __DECONST(struct facund_object *, obj);
++
++	if (obj-&gt;obj_type != FACUND_BOOL) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_WRONG_TYPE;
++		return -1;
++	}
++
++	if (obj-&gt;obj_assigned == 0) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_UNASSIGNED;
++		return -1;
++	}
+ 	assert(obj-&gt;obj_assigned == 1);
+ 
+-	real_obj =  __DECONST(struct facund_object *, obj);
+ 	real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_NONE;
+ 	return obj-&gt;obj_int;
+ }
+@@ -131,12 +143,24 @@
+ {
+ 	struct facund_object *real_obj;
+ 
+-	/* TODO: Change these to proper checks */
+-	assert(obj != NULL);
+-	assert(obj-&gt;obj_type == FACUND_INT);
++	if (obj == NULL) {
++		return 0;
++	}
++
++	/* Get an object we can edit */
++	real_obj =  __DECONST(struct facund_object *, obj);
++
++	if (obj-&gt;obj_type != FACUND_INT) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_WRONG_TYPE;
++		return 0;
++	}
++
++	if (obj-&gt;obj_assigned == 0) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_UNASSIGNED;
++		return 0;
++	}
+ 	assert(obj-&gt;obj_assigned == 1);
+ 
+-	real_obj =  __DECONST(struct facund_object *, obj);
+ 	real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_NONE;
+ 	return obj-&gt;obj_int;
+ }
+@@ -176,9 +200,22 @@
+ {
+ 	struct facund_object *real_obj;
+ 
+-	/* TODO: Change these to proper checks */
+-	assert(obj != NULL);
+-	assert(obj-&gt;obj_type == FACUND_UINT);
++	if (obj == NULL) {
++		return 0;
++	}
++
++	/* Get an object we can edit */
++	real_obj =  __DECONST(struct facund_object *, obj);
++
++	if (obj-&gt;obj_type != FACUND_UINT) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_WRONG_TYPE;
++		return 0;
++	}
++
++	if (obj-&gt;obj_assigned == 0) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_UNASSIGNED;
++		return 0;
++	}
+ 	assert(obj-&gt;obj_assigned == 1);
+ 
+ 	real_obj =  __DECONST(struct facund_object *, obj);
+@@ -233,12 +270,24 @@
+ {
+ 	struct facund_object *real_obj;
+ 
+-	/* TODO: Change these to proper checks */
+-	assert(obj != NULL);
+-	assert(obj-&gt;obj_type == FACUND_STRING);
++	if (obj == NULL) {
++		return NULL;
++	}
++
++	/* Get an object we can edit */
++	real_obj =  __DECONST(struct facund_object *, obj);
++
++	if (obj-&gt;obj_type != FACUND_STRING) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_WRONG_TYPE;
++		return NULL;
++	}
++
++	if (obj-&gt;obj_assigned == 0) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_UNASSIGNED;
++		return NULL;
++	}
+ 	assert(obj-&gt;obj_assigned == 1);
+ 
+-	real_obj =  __DECONST(struct facund_object *, obj);
+ 	real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_NONE;
+ 
+ 	return obj-&gt;obj_string;
+@@ -299,14 +348,29 @@
+ {
+ 	struct facund_object *real_obj;
+ 
+-	/* TODO: Change these to proper checks */
+-	assert(obj != NULL);
+-	assert(obj-&gt;obj_type == FACUND_ARRAY);
++	if (obj == NULL) {
++		return NULL;
++	}
++
++	/* Get an object we can edit */
++	real_obj =  __DECONST(struct facund_object *, obj);
++
++	if (obj-&gt;obj_type != FACUND_ARRAY) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_WRONG_TYPE;
++		return NULL;
++	}
++
++	if (obj-&gt;obj_assigned == 0) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_UNASSIGNED;
++		return NULL;
++	}
+ 	assert(obj-&gt;obj_assigned == 1);
+-	if (pos &gt;= obj-&gt;obj_array_count)
++
++	if (pos &gt;= obj-&gt;obj_array_count) {
++		real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_NO_OBJECT;
+ 		return NULL;
++	}
+ 
+-	real_obj =  __DECONST(struct facund_object *, obj);
+ 	real_obj-&gt;obj_error = FACUND_OBJECT_ERROR_NONE;
+ 	return obj-&gt;obj_array[pos];
+ }
+@@ -370,9 +434,13 @@
+ int
+ facund_object_set_from_str(struct facund_object *obj, const char *value)
+ {
+-	if (obj == NULL || value == NULL) {
++	if (obj == NULL) {
+ 		return -1;
+ 	}
++	if (value == NULL) {
++		obj-&gt;obj_error = FACUND_OBJECT_ERROR_BADSTRING;
++		return -1;
++	}
+ 
+ 	switch(obj-&gt;obj_type) {
+ 	case FACUND_BOOL:
+@@ -384,7 +452,7 @@
+ 
+ 		data = strtonum(value, INT32_MIN, INT32_MAX, &amp;errstr);
+ 		if (errstr != NULL) {
+-			/* TODO: Error handeling */
++			obj-&gt;obj_error = FACUND_OBJECT_ERROR_BADSTRING;
+ 			return -1;
+ 		}
+ 		return facund_object_set_int(obj, data);
+@@ -395,7 +463,7 @@
+ 
+ 		data = strtonum(value, 0, UINT32_MAX, &amp;errstr);
+ 		if (errstr != NULL) {
+-			/* TODO: Error handeling */
++			obj-&gt;obj_error = FACUND_OBJECT_ERROR_BADSTRING;
+ 			return -1;
+ 		}
+ 		return facund_object_set_uint(obj, data);
+@@ -429,7 +497,7 @@
+ const char *
+ facund_object_xml_string(struct facund_object *obj __unused)
+ {
+-	if (obj == NULL)
++	if (obj == NULL || obj-&gt;obj_assigned == 0)
+ 		return NULL;
+ 
+ 	if (obj-&gt;obj_xml_string == NULL) {
+@@ -462,6 +530,7 @@
+ 
+ 				curobj = __DECONST(struct facund_object *,
+ 				    facund_object_get_array_item(obj, pos));
++				assert(curobj-&gt;obj_assigned == 1);
+ 				tmpdata = facund_object_xml_string(curobj);
+ 
+ 				/* Append the new data to the end of the data */
+@@ -539,6 +608,7 @@
+ 		}
+ 		}
+ 	} else {
++		assert(obj-&gt;obj_assigned == 0);
+ 		printf(&quot;Unassigned&quot;);
+ 	}
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000000.html">r6 - trunk/lib/test
+</A></li>
+	<LI>Next message: <A HREF="000002.html">r8 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1">[ date ]</a>
+              <a href="thread.html#1">[ thread ]</a>
+              <a href="subject.html#1">[ subject ]</a>
+              <a href="author.html#1">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>

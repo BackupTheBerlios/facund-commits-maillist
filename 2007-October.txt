@@ -1,0 +1,2940 @@
+From zxombie at users.berlios.de  Sat Oct  6 21:49:14 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sat, 6 Oct 2007 21:49:14 +0200
+Subject: r13 - trunk/lib/test
+Message-ID: <200710061949.l96JnEwq008983@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-06 21:48:55 +0200 (Sat, 06 Oct 2007)
+New Revision: 13
+
+Added:
+   trunk/lib/test/test_facund_server.c
+Modified:
+   trunk/lib/test/Makefile
+   trunk/lib/test/main.c
+   trunk/lib/test/test.h
+   trunk/lib/test/test_facund_response.c
+Log:
+Add tests for the facund server
+
+
+Modified: trunk/lib/test/Makefile
+===================================================================
+--- trunk/lib/test/Makefile	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/Makefile	2007-10-06 19:48:55 UTC (rev 13)
+@@ -1,12 +1,12 @@
+ PROG=	tests
+ SRCS=	main.c test_facund_connection.c test_facund_object.c \
+-	test_facund_response.c
++	test_facund_response.c test_facund_server.c
+ 
+ WARNS?=		6
+ 
+ # libfacund
+ CFLAGS+=	-I${.CURDIR}/..
+-LDADD+=		${.OBJDIR}/../libfacund.a
++LDADD+=		${.OBJDIR}/../libfacund.a -lbsdxml
+ 
+ # libcheck
+ CFLAGS+=	-I/usr/local/include
+
+Modified: trunk/lib/test/main.c
+===================================================================
+--- trunk/lib/test/main.c	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/main.c	2007-10-06 19:48:55 UTC (rev 13)
+@@ -38,6 +38,7 @@
+ 	sr = srunner_create(facund_connection_suite());
+ 	srunner_add_suite(sr, facund_object_suite());
+ 	srunner_add_suite(sr, facund_response_suite());
++	srunner_add_suite(sr, facund_server_suite());
+ 
+ 	srunner_run_all(sr, CK_NORMAL);
+ 	fail_count = srunner_ntests_failed(sr);
+
+Modified: trunk/lib/test/test.h
+===================================================================
+--- trunk/lib/test/test.h	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/test.h	2007-10-06 19:48:55 UTC (rev 13)
+@@ -33,5 +33,6 @@
+ Suite *facund_connection_suite(void);
+ Suite *facund_object_suite(void);
+ Suite *facund_response_suite(void);
++Suite *facund_server_suite(void);
+ 
+ #endif /* FACND_TEST_H */
+
+Modified: trunk/lib/test/test_facund_response.c
+===================================================================
+--- trunk/lib/test/test_facund_response.c	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/test_facund_response.c	2007-10-06 19:48:55 UTC (rev 13)
+@@ -50,6 +50,10 @@
+ 	fail_unless(strcmp(
+ 	    "<response id=\"id\" code=\"0\" message=\"msg\"></response>",
+ 	    facund_response_string(resp)) == 0, NULL);
++	fail_unless(facund_response_set_id(resp, "foo") == 0, NULL);
++	fail_unless(strcmp(
++	    "<response id=\"foo\" code=\"0\" message=\"msg\"></response>",
++	    facund_response_string(resp)) == 0, NULL);
+ 	facund_response_free(resp);
+ }
+ END_TEST
+@@ -81,6 +85,10 @@
+ 	fail_unless(strcmp(
+ 	    "<response code=\"0\" message=\"msg\"></response>",
+ 	    facund_response_string(resp)) == 0, NULL);
++	fail_unless(facund_response_set_id(resp, "foo") == 0, NULL);
++	fail_unless(strcmp(
++	    "<response id=\"foo\" code=\"0\" message=\"msg\"></response>",
++	    facund_response_string(resp)) == 0, NULL);
+ 	facund_response_free(resp);
+ }
+ END_TEST
+
+Added: trunk/lib/test/test_facund_server.c
+===================================================================
+--- trunk/lib/test/test_facund_server.c	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/test_facund_server.c	2007-10-06 19:48:55 UTC (rev 13)
+@@ -0,0 +1,358 @@
++/*
++ * Copyright (C) 2007 Andrew Turner
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ */
++
++#include "test.h"
++
++#include <facund_connection.h>
++#include <facund_object.h>
++#include <facund_response.h>
++
++#include <stdlib.h>
++#include <string.h>
++
++#define facund_server_pre(server_var, client_var) \
++do { \
++	/* Make sure the socket is removed */ \
++	system("rm -f /tmp/facund_test"); \
++	fail_unless((server_var = facund_connect_server("/tmp/facund_test")) \
++	    != NULL, NULL); \
++	fail_unless((client_var = facund_connect_client("/tmp/facund_test")) \
++	    != NULL, NULL); \
++	fail_unless(facund_server_start(server_var, 0) == 0, NULL); \
++} while(0)
++
++#define facund_server_check_data(connection, data) \
++do { \
++	char readbuf[1024]; \
++	fail_unless(sizeof readbuf > strlen(data), NULL); \
++	memset(readbuf, 0, sizeof readbuf); \
++	facund_recv(connection, readbuf, strlen(data)); \
++	fail_unless(strcmp(readbuf, data) == 0, \
++	    "\nExpected: %s\n     Got: %s", data, readbuf); \
++} while (0)
++
++#define facund_server_test_empty_data(type) \
++do { \
++	struct facund_conn *conn_s, *conn_c; \
++	const char msg[] = "<facund-client version=\"0\">" \
++	    "<call name=\"foo\" id=\"1\">" \
++	    "<data type=\""type"\"></data>" \
++	    "</call>" \
++	    "</facund-client>"; \
++	/* Connect */ \
++	facund_server_pre(conn_s, conn_c); \
++	/* Check we connected correctly */ \
++	facund_server_check_data(conn_c, "<facund-server version=\"0\">"); \
++	/* Add a call handler and attempt to call it */ \
++	facund_dummy_cb_called = 0; \
++	fail_unless(facund_server_add_call("foo", facund_dummy_cb) == 0,NULL); \
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL); \
++	/* Parse the call */ \
++	fail_unless(facund_server_get_request(conn_s) == 0, NULL); \
++	/* Check it failed */ \
++	facund_server_check_data(conn_c, \
++	    "<response id=\"1\" code=\"400\" message=\"Missing value\">" \
++	    "</response>"); \
++	fail_unless(facund_dummy_cb_called == 0, NULL); \
++	fail_unless(facund_dummy_cb_obj_value == 0, NULL); \
++	fail_unless(facund_server_finish(conn_s) == 0, NULL); \
++	/* Check the server correctly closed the connection */ \
++	facund_server_check_data(conn_c, "</facund-server>"); \
++	/* Disconnect */ \
++	facund_close(conn_c); \
++	facund_cleanup(conn_s); \
++} while(0)
++
++#define facund_server_test_bad_data(type, data) \
++do { \
++	struct facund_conn *conn_s, *conn_c; \
++	const char msg[] = "<facund-client version=\"0\">" \
++	    "<call name=\"foo\" id=\"1\">" \
++	    "<data type=\""type"\">"data"</data>" \
++	    "</call>" \
++	    "</facund-client>"; \
++	/* Connect */ \
++	facund_server_pre(conn_s, conn_c); \
++	/* Check we connected correctly */ \
++	facund_server_check_data(conn_c, "<facund-server version=\"0\">"); \
++	/* Add a call handler and attempt to call it */ \
++	facund_dummy_cb_called = 0; \
++	fail_unless(facund_server_add_call("foo", facund_dummy_cb) == 0,NULL); \
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL); \
++	/* Parse the call */ \
++	fail_unless(facund_server_get_request(conn_s) == 0, NULL); \
++	/* Check it succeeded */ \
++	facund_server_check_data(conn_c, \
++	    "<response id=\"1\" code=\"401\" message=\"Invalid value\">" \
++	    "</response>"); \
++	fail_unless(facund_dummy_cb_called == 0, NULL); \
++	fail_unless(facund_dummy_cb_obj_value == 0, NULL); \
++	fail_unless(facund_server_finish(conn_s) == 0, NULL); \
++	/* Check the server correctly closed the connection */ \
++	facund_server_check_data(conn_c, "</facund-server>"); \
++	/* Disconnect */ \
++	facund_close(conn_c); \
++	facund_cleanup(conn_s); \
++} while (0)
++
++static struct facund_response *facund_dummy_cb(const char *,
++    struct facund_object *);
++
++static int facund_dummy_cb_called = 0;
++static int facund_dummy_cb_obj_value = 0;
++
++static struct facund_response *
++facund_dummy_cb(const char *id, struct facund_object *obj)
++{
++	struct facund_object *ret;
++
++	facund_dummy_cb_called = 1;
++	if (facund_object_get_type(obj) == FACUND_INT) {
++		facund_dummy_cb_obj_value = facund_object_get_int(obj);
++	} else {
++		facund_dummy_cb_obj_value = -1;
++	}
++	ret = facund_object_new_bool();
++	facund_object_set_bool(ret, 1);
++	return facund_response_new(id, RESP_GOOD, "message", ret);
++}
++
++START_TEST(facund_server_null)
++{
++	fail_unless(facund_server_start(NULL, 0) == -1, NULL);
++	fail_unless(facund_server_get_request(NULL) == -1, NULL);
++	fail_unless(facund_server_finish(NULL) == -1, NULL);
++	fail_unless(facund_server_add_call(NULL, NULL) == -1, NULL);
++	fail_unless(facund_server_add_call("foo", NULL) == -1, NULL);
++	fail_unless(facund_server_add_call(NULL, facund_dummy_cb) == -1, NULL);
++}
++END_TEST
++
++/*
++ * Tests if the server will complain when adding a call with the same name
++ */
++START_TEST(facund_server_multiple_add_call)
++{
++	fail_unless(facund_server_add_call("foo", facund_dummy_cb) == 0, NULL);
++	fail_unless(facund_server_add_call("foo", facund_dummy_cb) == -1, NULL);
++}
++END_TEST
++
++/*
++ * Tests if the server sends the correct data when connecting/disconnecting
++ */
++START_TEST(facund_server_create)
++{
++	struct facund_conn *conn_s, *conn_c;
++
++	facund_server_pre(conn_s, conn_c);
++
++	/* Check the server correctly started the connection */
++	facund_server_check_data(conn_c, "<facund-server version=\"0\">");
++
++	fail_unless(facund_server_finish(conn_s) == 0, NULL);
++
++	/* Check the server correctly closed the connection */
++	facund_server_check_data(conn_c, "</facund-server>");
++	
++	facund_close(conn_c);
++	facund_cleanup(conn_s);
++}
++END_TEST
++
++/*
++ * Test if calls work as expected
++ */
++START_TEST(facund_server_call)
++{
++	struct facund_conn *conn_s, *conn_c;
++	const char msg[] = "<facund-client version=\"0\">"
++	    "<call name=\"foo\" id=\"1\"><data type=\"int\">10</data></call>"
++	    "</facund-client>";
++	char buf[1024];
++
++	memset(buf, 0, sizeof buf);
++
++	/* Connect */
++	facund_server_pre(conn_s, conn_c);
++
++	/* Check we connected correctly */
++	facund_server_check_data(conn_c, "<facund-server version=\"0\">");
++
++	/* Add a call handler and attempt to call it */
++	facund_dummy_cb_called = 0;
++	fail_unless(facund_server_add_call("foo", facund_dummy_cb) == 0, NULL);
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL);
++
++	/* Parse the call */
++	fail_unless(facund_server_get_request(conn_s) == 0, NULL);
++
++	/* Check it succeeded */
++	facund_server_check_data(conn_c,
++	    "<response id=\"1\" code=\"0\" message=\"message\">"
++	    "<data type=\"bool\">true</data></response>");
++	fail_unless(facund_dummy_cb_called == 1, NULL);
++	fail_unless(facund_dummy_cb_obj_value == 10, NULL);
++
++	fail_unless(facund_server_finish(conn_s) == 0, NULL);
++
++	/* Check the server correctly closed the connection */
++	facund_server_check_data(conn_c, "</facund-server>");
++
++	/* Disconnect */
++	facund_close(conn_c);
++	facund_cleanup(conn_s);
++}
++END_TEST
++
++/*
++ * Test if calls work as expected when the call is missing
++ */
++START_TEST(facund_server_call_missing)
++{
++	struct facund_conn *conn_s, *conn_c;
++	const char msg[] = "<facund-client version=\"0\">"
++	    "<call name=\"foo\" id=\"1\"><data type=\"int\">10</data></call>"
++	    "</facund-client>";
++	char buf[1024];
++
++	memset(buf, 0, sizeof buf);
++
++	/* Connect */
++	facund_server_pre(conn_s, conn_c);
++
++	/* Check we connected correctly */
++	facund_server_check_data(conn_c, "<facund-server version=\"0\">");
++
++	/* Add a call handler and attempt to call it */
++	facund_dummy_cb_called = 0;
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL);
++
++	/* Parse the call */
++	facund_server_get_request(conn_s);
++
++	/* Check it succeeded */
++	facund_server_check_data(conn_c,
++	    "<response id=\"1\" code=\"300\" message=\"Unknown call\">"
++	    "</response>");
++	fail_unless(facund_dummy_cb_called == 0, NULL);
++	fail_unless(facund_dummy_cb_obj_value == 0, NULL);
++
++	fail_unless(facund_server_finish(conn_s) == 0, NULL);
++
++	/* Check the server correctly closed the connection */
++	facund_server_check_data(conn_c, "</facund-server>");
++
++	/* Disconnect */
++	facund_close(conn_c);
++	facund_cleanup(conn_s);
++}
++END_TEST
++
++/* Test if calls work as expected with an empty bool */
++START_TEST(facund_server_call_empty_bool)
++{
++	facund_server_test_empty_data("bool");
++}
++END_TEST
++
++/* Test if calls work as expected with an empty int */
++START_TEST(facund_server_call_empty_int)
++{
++	facund_server_test_empty_data("int");
++}
++END_TEST
++
++/* Test if calls work as expected with an invalid int */
++START_TEST(facund_server_call_bad_int)
++{
++	facund_server_test_bad_data("int", "foo");
++}
++END_TEST
++
++/* Test if calls work as expected with an empty unsigned int */
++START_TEST(facund_server_call_empty_uint)
++{
++	facund_server_test_empty_data("unsigned int");
++}
++END_TEST
++
++/* Test if calls work as expected with an invalid unsigned int */
++START_TEST(facund_server_call_bad_uint)
++{
++	facund_server_test_bad_data("unsigned int", "foo");
++}
++END_TEST
++
++/* Test if calls work as expected with an empty string */
++START_TEST(facund_server_call_empty_string)
++{
++	facund_server_test_empty_data("string");
++}
++END_TEST
++
++/* Test if calls work as expected with an empty array */
++START_TEST(facund_server_call_empty_array)
++{
++	facund_server_test_empty_data("array");
++}
++END_TEST
++
++/* Test if calls work as expected with an invalid array */
++START_TEST(facund_server_call_bad_array)
++{
++	facund_server_test_bad_data("array", "foo");
++}
++END_TEST
++
++Suite *
++facund_server_suite()
++{
++	Suite *s;
++	TCase *tc;
++
++	s = suite_create("facund_server");
++
++	tc = tcase_create("server");
++	tcase_add_test(tc, facund_server_null);
++	tcase_add_test(tc, facund_server_multiple_add_call);
++	tcase_add_test(tc, facund_server_create);
++	tcase_add_test(tc, facund_server_call);
++	tcase_add_test(tc, facund_server_call_missing);
++	tcase_add_test(tc, facund_server_call_empty_bool);
++	tcase_add_test(tc, facund_server_call_empty_int);
++	tcase_add_test(tc, facund_server_call_bad_int);
++	tcase_add_test(tc, facund_server_call_empty_uint);
++	tcase_add_test(tc, facund_server_call_bad_uint);
++	tcase_add_test(tc, facund_server_call_empty_string);
++	tcase_add_test(tc, facund_server_call_empty_array);
++	tcase_add_test(tc, facund_server_call_bad_array);
++	suite_add_tcase(s, tc);
++
++	return s;
++}
++
+
+
+
+From zxombie at users.berlios.de  Sat Oct  6 21:52:00 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sat, 6 Oct 2007 21:52:00 +0200
+Subject: r14 - trunk/lib/test
+Message-ID: <200710061952.l96Jq0Lh009094@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-06 21:51:50 +0200 (Sat, 06 Oct 2007)
+New Revision: 14
+
+Modified:
+   trunk/lib/test/test_facund_connection.c
+Log:
+Remove the test socket
+
+Modified: trunk/lib/test/test_facund_connection.c
+===================================================================
+--- trunk/lib/test/test_facund_connection.c	2007-10-06 19:48:55 UTC (rev 13)
++++ trunk/lib/test/test_facund_connection.c	2007-10-06 19:51:50 UTC (rev 14)
+@@ -31,6 +31,7 @@
+ 
+ #include <sys/stat.h>
+ 
++#include <stdlib.h>
+ #include <string.h>
+ 
+ /*
+@@ -48,6 +49,9 @@
+ 	struct facund_conn *conn;
+ 	struct stat sb;
+ 
++	/* Make sure the socket is removed */
++	system("rm -f /tmp/facund_test");
++
+ 	fail_unless((conn = facund_connect_server("/tmp/facund_test")) != NULL,
+ 	    NULL);
+ 	fail_unless(lstat("/tmp/facund_test", &sb) == 0, NULL);
+@@ -82,8 +86,11 @@
+ START_TEST(facund_connection_cs_connects)
+ {
+ 	char buf[5];
++	struct facund_conn *conn_s, *conn_c;
+ 
+-	struct facund_conn *conn_s, *conn_c;
++	/* Make sure the socket is removed */
++	system("rm -f /tmp/facund_test");
++
+ 	fail_unless((conn_s = facund_connect_server("/tmp/facund_test"))
+ 	    != NULL, NULL);
+ 	fail_unless((conn_c = facund_connect_client("/tmp/facund_test"))
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 00:53:09 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 00:53:09 +0200
+Subject: r15 - trunk/lib
+Message-ID: <200710062253.l96Mr9Y7025379@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 00:52:56 +0200 (Sun, 07 Oct 2007)
+New Revision: 15
+
+Modified:
+   trunk/lib/Makefile
+Log:
+Attach the tests up to the build
+
+Modified: trunk/lib/Makefile
+===================================================================
+--- trunk/lib/Makefile	2007-10-06 19:51:50 UTC (rev 14)
++++ trunk/lib/Makefile	2007-10-06 22:52:56 UTC (rev 15)
+@@ -4,4 +4,6 @@
+ 
+ WARNS=6
+ 
++SUBDIR=	test
++
+ .include <bsd.lib.mk>
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 00:55:15 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 00:55:15 +0200
+Subject: r16 - trunk/lib/test
+Message-ID: <200710062255.l96MtFhQ027698@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 00:55:05 +0200 (Sun, 07 Oct 2007)
+New Revision: 16
+
+Modified:
+   trunk/lib/test/Makefile
+Log:
+Remove tests.core when cleaning
+
+Modified: trunk/lib/test/Makefile
+===================================================================
+--- trunk/lib/test/Makefile	2007-10-06 22:52:56 UTC (rev 15)
++++ trunk/lib/test/Makefile	2007-10-06 22:55:05 UTC (rev 16)
+@@ -3,6 +3,7 @@
+ 	test_facund_response.c test_facund_server.c
+ 
+ WARNS?=		6
++CLEANFILES+=	tests.core
+ 
+ # libfacund
+ CFLAGS+=	-I${.CURDIR}/..
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 00:58:11 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 00:58:11 +0200
+Subject: r17 - trunk/lib
+Message-ID: <200710062258.l96MwBid028977@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 00:58:01 +0200 (Sun, 07 Oct 2007)
+New Revision: 17
+
+Modified:
+   trunk/lib/facund_object.c
+   trunk/lib/facund_object.h
+Log:
+Initalise the facund_object to zero
+Add facund_object_is_assigned to tell if the object has had a value assigned yet
+
+
+Modified: trunk/lib/facund_object.c
+===================================================================
+--- trunk/lib/facund_object.c	2007-10-06 22:55:05 UTC (rev 16)
++++ trunk/lib/facund_object.c	2007-10-06 22:58:01 UTC (rev 17)
+@@ -411,6 +411,7 @@
+ 	if (obj->obj_xml_string != NULL)
+ 		free(obj->obj_xml_string);
+ 
++	memset(obj, 0, sizeof(struct facund_object));
+ 	free(obj);
+ }
+ 
+@@ -494,6 +495,12 @@
+ 	return obj->obj_type;
+ }
+ 
++int
++facund_object_is_assigned(const struct facund_object *obj)
++{
++	return obj->obj_assigned == 1;
++}
++
+ const char *
+ facund_object_xml_string(struct facund_object *obj __unused)
+ {
+
+Modified: trunk/lib/facund_object.h
+===================================================================
+--- trunk/lib/facund_object.h	2007-10-06 22:55:05 UTC (rev 16)
++++ trunk/lib/facund_object.h	2007-10-06 22:58:01 UTC (rev 17)
+@@ -81,6 +81,7 @@
+ 
+ enum facund_object_error facund_object_get_error(const struct facund_object*);
+ enum facund_type	 facund_object_get_type(const struct facund_object *);
++int			 facund_object_is_assigned(const struct facund_object*);
+ const char		*facund_object_xml_string(struct facund_object *);
+ void			 facund_object_print(struct facund_object *);
+ 
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 01:11:32 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 01:11:32 +0200
+Subject: r20 - trunk/backend
+Message-ID: <200710062311.l96NBWkS031875@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 01:11:27 +0200 (Sun, 07 Oct 2007)
+New Revision: 20
+
+Modified:
+   trunk/backend/Makefile
+Log:
+Allow the warning level to be changed in the backend
+
+Modified: trunk/backend/Makefile
+===================================================================
+--- trunk/backend/Makefile	2007-10-06 23:10:03 UTC (rev 19)
++++ trunk/backend/Makefile	2007-10-06 23:11:27 UTC (rev 20)
+@@ -5,6 +5,6 @@
+ 
+ MAN=
+ 
+-WARNS=	6
++WARNS?=	6
+ 
+ .include <bsd.prog.mk>
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 01:14:28 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 01:14:28 +0200
+Subject: r21 - in trunk: backend lib lib/test
+Message-ID: <200710062314.l96NESV3002906@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 01:14:18 +0200 (Sun, 07 Oct 2007)
+New Revision: 21
+
+Modified:
+   trunk/backend/
+   trunk/lib/
+   trunk/lib/test/
+Log:
+Ignore executables and libraries
+
+
+Property changes on: trunk/backend
+___________________________________________________________________
+Name: svn:ignore
+   + facund-be
+
+
+
+Property changes on: trunk/lib
+___________________________________________________________________
+Name: svn:ignore
+   + *.a
+*.po
+
+
+
+Property changes on: trunk/lib/test
+___________________________________________________________________
+Name: svn:ignore
+   + tests
+
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 01:11:19 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 01:11:19 +0200
+Subject: r19 - trunk/lib
+Message-ID: <200710062311.l96NBJuQ031677@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 01:10:03 +0200 (Sun, 07 Oct 2007)
+New Revision: 19
+
+Modified:
+   trunk/lib/facund_server.c
+Log:
+Check the connection is not NULL
+Check if the hash table of calls has been initalised
+Use facund_object_is_assigned and facund_object_get_type rather than looking at the object directly
+Check the return value of facund_object_set_from_str
+
+
+Modified: trunk/lib/facund_server.c
+===================================================================
+--- trunk/lib/facund_server.c	2007-10-06 23:01:26 UTC (rev 18)
++++ trunk/lib/facund_server.c	2007-10-06 23:10:03 UTC (rev 19)
+@@ -59,6 +59,10 @@
+ {
+ 	char *str;
+ 
++	if (conn == NULL) {
++		return -1;
++	}
++
+ 	conn->close = 0;
+ 	conn->parser = XML_ParserCreate(NULL);
+ 	if (facund_accept(conn) == -1) {
+@@ -98,6 +102,9 @@
+ 	char *buf;
+ 	ssize_t len;
+ 
++	if (conn == NULL) {
++		return -1;
++	}
+ 	if (conn->close == 1) {
+ 		return 1;
+ 	}
+@@ -120,6 +127,10 @@
+ {
+ 	const char *str;
+ 
++	if (conn == NULL) {
++		return -1;
++	}
++
+ 	str = "</facund-server>";
+ 	facund_send(conn, str, strlen(str));
+ 
+@@ -144,24 +155,27 @@
+ 
+ 	resp = NULL;
+ 
+-	/* Find the callback and execute it if it exists */
+-	key.data = __DECONST(void *, name);
+-	key.size = (strlen(name) + 1) * sizeof(char);
+-	ret = call_db->get(call_db, &key, &data, 0);
+-	if (ret == 0) {
+-		/* Get the callback and execute it */
+-		cb = *(facund_call_cb **)data.data;
+-		assert(cb != NULL);
+-		resp = cb(id, arg);
+-		if (resp == NULL) {
+-			/* TODO: Remove Magic Number */
+-			resp = facund_response_new(id, 1,
+-			    "Method returned an invalid response", NULL);
++	if (call_db != NULL) {
++		/* Find the callback and execute it if it exists */
++		key.data = __DECONST(void *, name);
++		key.size = (strlen(name) + 1) * sizeof(char);
++		ret = call_db->get(call_db, &key, &data, 0);
++		if (ret == 0) {
++			/* Get the callback and execute it */
++			cb = *(facund_call_cb **)data.data;
++			assert(cb != NULL);
++			resp = cb(id, arg);
++			if (resp == NULL) {
++				/* TODO: Remove Magic Number */
++				resp = facund_response_new(id, 1,
++				    "Method returned an invalid response",NULL);
++			}
+ 		}
+-	} else {
+-		/* TODO: Remove Magic Number */
+-		resp = facund_response_new(id, 1, "Invalid request", NULL);
+ 	}
++	if (resp == NULL) {
++		resp = facund_response_new(id, RESP_UNKNOWN_CALL,
++		    "Unknown call", NULL);
++	}
+ 
+ 	return resp;
+ }
+@@ -317,6 +331,14 @@
+ 		conn->call_arg = NULL;
+ 	} else if (strcmp(name, "data") == 0) {
+ 		/*
++		 * At this point the data item should have been set
++		 */
++		if (facund_object_is_assigned(conn->call_arg) == 0 &&
++		    conn->resp == NULL) {
++			conn->resp = facund_response_new(conn->call_id,
++			    RESP_EMPTY_VALUE, "Missing value", NULL);
++		}
++		/*
+ 		 *  Set the argument to the item's parent
+ 		 *  if it has one. ie. it's in an array
+ 		 */
+@@ -339,12 +361,15 @@
+ 	conn = (struct facund_conn *)data;
+ 	if (conn->call_arg == NULL) {
+ 		return;
+-	} else if (conn->call_arg->obj_assigned == 1) {
++	} else if (facund_object_is_assigned(conn->call_arg)) {
+ 		/* TODO: Return an error */
+ 		return;
+-	} else if (conn->call_arg->obj_type == FACUND_ARRAY) {
++	} else if (facund_object_get_type(conn->call_arg) == FACUND_ARRAY) {
+ 		/* Arrays must not have any text within them */
+-		/* TODO: Return an error */
++		if (conn->resp == NULL) {
++			conn->resp = facund_response_new(conn->call_id,
++			    RESP_INCORECT_DATA, "Invalid value", NULL);
++		}
+ 		return;
+ 	}
+ 
+@@ -354,7 +379,12 @@
+ 		return;
+ 	}
+ 	strlcpy(text, str, len + 1);
+-	facund_object_set_from_str(conn->call_arg, text);
++	if(facund_object_set_from_str(conn->call_arg, text) == -1) {
++		if (conn->resp == NULL) {
++			conn->resp = facund_response_new(conn->call_id,
++			    RESP_INCORECT_DATA, "Invalid value", NULL);
++		}
++	}
+ 
+ 	free(text);
+ }
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 01:03:14 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 01:03:14 +0200
+Subject: r18 - trunk/lib
+Message-ID: <200710062303.l96N3Evq031204@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 01:01:26 +0200 (Sun, 07 Oct 2007)
+New Revision: 18
+
+Modified:
+   trunk/lib/facund_response.c
+   trunk/lib/facund_response.h
+Log:
+Add facund_response_set_id to set the response's ID before sending
+
+Modified: trunk/lib/facund_response.c
+===================================================================
+--- trunk/lib/facund_response.c	2007-10-06 22:58:01 UTC (rev 17)
++++ trunk/lib/facund_response.c	2007-10-06 23:01:26 UTC (rev 18)
+@@ -106,6 +106,34 @@
+ 	return resp->resp_string;
+ }
+ 
++int
++facund_response_set_id(struct facund_response *resp, const char *id)
++{
++	char *tmp;
++
++	if (resp == NULL || id == NULL) {
++		return -1;
++	}
++
++	tmp = strdup(id);
++	if (tmp == NULL) {
++		return -1;
++	}
++	if (resp->resp_id != NULL) {
++		free(resp->resp_id);
++	}
++	resp->resp_id = tmp;
++
++	/* Empty the resp_string cache */
++	if (resp->resp_string != NULL) {
++		free(resp->resp_string);
++		resp->resp_string = NULL;
++	}
++	
++
++	return 0;
++}
++
+ /*
+  * Free's a response after use
+  */
+
+Modified: trunk/lib/facund_response.h
+===================================================================
+--- trunk/lib/facund_response.h	2007-10-06 22:58:01 UTC (rev 17)
++++ trunk/lib/facund_response.h	2007-10-06 23:01:26 UTC (rev 18)
+@@ -52,6 +52,8 @@
+ struct facund_response	*facund_response_new(const char *, facund_response_code,
+ 			    const char *, struct facund_object *);
+ const char		*facund_response_string(struct facund_response *);
++int			 facund_response_set_id(struct facund_response *,
++			    const char *);
+ void			 facund_response_free(struct facund_response *);
+ 
+ #endif /* FACUND_RESPONSE_H */
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 03:12:51 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 03:12:51 +0200
+Subject: r22 - trunk/frontend/facund
+Message-ID: <200710070112.l971Cp7v013373@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 03:12:45 +0200 (Sun, 07 Oct 2007)
+New Revision: 22
+
+Modified:
+   trunk/frontend/facund/call.py
+Log:
+Document the Response class and add examples to use as tests
+
+Modified: trunk/frontend/facund/call.py
+===================================================================
+--- trunk/frontend/facund/call.py	2007-10-06 23:14:18 UTC (rev 21)
++++ trunk/frontend/facund/call.py	2007-10-07 01:12:45 UTC (rev 22)
+@@ -36,8 +36,8 @@
+ 
+ 	def getCall(self):
+ 		# TODO: Use a better call ID
+-		return "<call id=\"1\" name=\"%s\">%s</call>" % (self.__name,
+-		    self.__args)
++		return "<call id=\"1\" name=\"%s\">%s</call>" \
++		    % (self.__name, self.__args)
+ 
+ 	def getID(self):
+ 		return 1
+@@ -57,6 +57,10 @@
+ 		self.__responseLock.release()
+ 
+ class Response:
++	'''
++	A response is the data returned from a remote server when
++	issued a call.
++	'''
+ 	def __init__(self, id, code, message, data = None):
+ 		self.__id = id
+ 		self.__code = code
+@@ -64,12 +68,50 @@
+ 		self.__data = data
+ 
+ 	def __str__(self):
+-		return "<response id=\"%s\" message=\"%s\" code=\"%s\">%s</response>" \
++		'''
++		Returns the XML string that can be sent to a client after
++		a call.
++
++		>>> import data
++		>>> b = data.Bool(False)
++		>>> str(Response(1, 0, 'Ok', b))
++		'<response id="1" message="Ok" code="0"><data type="bool">False</data></response>'
++		'''
++		return "<response id=\"%s\" message=\"%s\" code=\"%s\">" \
++		    "%s</response>" \
+ 		    % (self.__id, self.__message, self.__code, 
+ 		       str(self.__data or ''))
+ 
+ 	def getData(self):
++		'''
++		Gets the data object returned by the call. The data will
++		be a facund object when the response is from facund server.
++
++		>>> import data
++		>>> b = data.Bool(True)
++		>>> r = Response(1, 0, 'Ok', b)
++		>>> r.getData() is b
++		True
++		'''
++
+ 		return self.__data
+ 
+ 	def getCode(self):
++		'''
++		Returns the return code. It will be zero for a valid call
++		or non zero on failure.
++
++		>>> Response(1, 0, 'Ok').getCode()
++		0
++
++		>>> Response(2, 50, 'Failure').getCode()
++		50
++		'''
+ 		return self.__code
++
++def _test():
++	import doctest
++	doctest.testmod()
++
++if __name__ == "__main__":
++	_test()
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 05:39:15 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 05:39:15 +0200
+Subject: r23 - trunk/frontend/facund
+Message-ID: <200710070339.l973dFUG022573@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 05:39:07 +0200 (Sun, 07 Oct 2007)
+New Revision: 23
+
+Modified:
+   trunk/frontend/facund/data.py
+Log:
+Document facund object classes and add examples to use as tests
+
+Modified: trunk/frontend/facund/data.py
+===================================================================
+--- trunk/frontend/facund/data.py	2007-10-07 01:12:45 UTC (rev 22)
++++ trunk/frontend/facund/data.py	2007-10-07 03:39:07 UTC (rev 23)
+@@ -27,44 +27,138 @@
+ import struct
+ 
+ class Object:
++	'''
++	A Facund object is the basic data type that can be sent
++	between the client and server. Most methods can be used
++	with all children objects. The only exception is setData()
++	can not be used with an Array.
++	
++	Do not use Object directly,
++	rather use one of the base classes.
++	'''
+ 	def __init__(self, type):
+ 		self.__parent = None
+ 		self.__data = None
+ 		self.__type = type
+ 
+ 	def __str__(self):
+-		'''Get the XML string for the current object'''
++		'''
++		Get the XML string for the current object.
++
++		>>> str(Bool(False))
++		'<data type="bool">False</data>'
++
++		>>> str(Int(10))
++		'<data type="int">10</data>'
++
++		>>> str(String('Hello'))
++		'<data type="string">Hello</data>'
++		'''
+ 		if self.__data is None:
+ 			raise ValueError("No value set")
+ 		return "<data type=\"%s\">%s</data>" % \
+-		    (self.__type, str(self.getData()).lower())
++		    (self.__type, str(self.getData()))
+ 		
+ 	def setParent(self, parent):
++		'''
++		Sets the object's parent. This is used with arrays and
++		shouldn't be used by the end user.
++		'''
+ 		self.__parent = parent
+ 
+ 	def getParent(self):
++		'''
++		Returns the parent object when the current object is part
++		of an array.
++
++		>>> a = Array()
++		>>> b = Bool()
++		>>> a.append(b)
++		>>> b.getParent() is a
++		True
++
++		>>> UnsignedInt(10).getParent() is None
++		True
++		'''
+ 		return self.__parent
+ 
+ 	def setData(self, data):
+ 		self.__data = data
+ 
+ 	def getData(self):
++		'''
++		Returns the value of the data stored in the object
++
++		>>> String("Hello World").getData()
++		'Hello World'
++		'''
+ 		return self.__data
+ 
+ 	def getType(self):
++		'''
++		Returns a string containing the type of data stored
++
++		>>> Array().getType()
++		'array'
++		'''
+ 		return self.__type
+ 
+ class Bool(Object):
++	'''
++	Creates a boolean Facund Object
++
++	>>> Bool().getType()
++	'bool'
++
++	The value of a Bool can be retrieved with getData().
++	It is true for all values where str(value) is True.
++	>>> Bool(True).getData()
++	True
++
++	As the Bool class assumes any data that
++	is not true is false this is valid:
++	>>> Bool('Bad String').getData()
++	False
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, "bool")
+ 		if data is not None:
+ 			self.setData(data)
+ 
+ 	def setData(self, data):
++		'''
++		Updates the value of a boolean
++
++		The data can be True:
++		>>> b = Bool()
++		>>> b.setData('True')
++		>>> b.getData()
++		True
++
++		Or the data can be anything else for false:
++		>>> b = Bool()
++		>>> b.setData('Foo')
++		>>> b.getData()
++		False
++
++		setData can also be used to change the value of an object:
++		>>> b = Bool(True)
++		>>> b.getData()
++		True
++		>>> b.setData(False)
++		>>> b.getData()
++		False
++		'''
+ 		data = str(data).lower()
+ 		Object.setData(self, data == 'true')
+ 
+ class Int(Object):
++	'''
++	An object to holds a 32 bit signed int
++
++	>>> Int(-1024).getType()
++	'int'
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, "int")
+ 		self.__min = (-0x7fffffff-1)
+@@ -73,12 +167,26 @@
+ 			self.setData(data)
+ 
+ 	def setData(self, data):
++		'''
++		Updates the value of an integer
++
++		>>> i = Int(100)
++		>>> i.setData(-200)
++		>>> i.getData()
++		-200
++		'''
+ 		data = int(data)
+ 		if data < self.__min or data > self.__max:
+ 			raise ValueError("Out of range")
+ 		Object.setData(self, int(data))
+ 
+ class UnsignedInt(Object):
++	'''
++	An object to holds a 32 bit unsigned int
++
++	>>> UnsignedInt(1024).getType()
++	'unsigned int'
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, "unsigned int")
+ 		self.__min = 0
+@@ -87,26 +195,63 @@
+ 			self.setData(data)
+ 
+ 	def setData(self, data):
++		'''
++		Updates the value of an unsigned integer
++
++		>>> u = UnsignedInt(100)
++		>>> u.setData(200)
++		>>> u.getData()
++		200
++		'''
+ 		data = int(data)
+ 		if data < self.__min or data > self.__max:
+ 			raise ValueError("Out of range")
+ 		Object.setData(self, int(data))
+ 
+ class String(Object):
++	'''
++	An object to holds a string of characters
++
++	>>> String('Hello World').getType()
++	'string'
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, "string")
+ 		if data is not None:
+ 			self.setData(data)
+ 		
+ 	def setData(self, data):
++		'''
++		Updates the value of a string
++
++		>>> s = String('Hello World')
++		>>> s.setData('Goodbye cruel world')
++		>>> s.getData()
++		'Goodbye cruel world'
++		'''
+ 		Object.setData(self, str(data))
+ 
+ class Array(Object):
++	'''
++	An object containing other objects in an order.
++
++	>>> Array().getType()
++	'array'
++	'''
+ 	def __init__(self):
+ 		Object.__init__(self, "array")
+ 		self.__data = []
+ 
+ 	def __str__(self):
++		'''
++		Returns an XML string containing the array objects
++
++		>>> a = Array()
++		>>> b = Bool(True)
++		>>> a.append(b)
++		>>> str(a)
++		'<data type="array"><data type="bool">True</data></data>'
++		'''
+ 		s = "<data type=\"array\">"
+ 		for data in self.__data:
+ 			s += str(data)
+@@ -114,15 +259,53 @@
+ 		return s
+ 
+ 	def append(self, data):
+-		'''Appends the data to the end of the array'''
++		'''
++		Appends the data to the end of the array.
++
++		>>> a = Array()
++		>>> b = Bool(True)
++		>>> a.append(b)
++		>>> i = Int(-10)
++		>>> a.append(i)
++		>>> a.getData()[0] is b
++		True
++		>>> a.getData()[1] is i
++		True
++		'''
+ 		if not isinstance(data, Object):
+ 			raise ValueError("Not a Faund Object")
+ 		self.__data.append(data)
+ 		data.setParent(self)
+ 
+ 	def getData(self):
++		'''
++		Gets a Python array of the objects in the facund Array
++
++		>>> a = Array()
++		>>> u = UnsignedInt(300)
++		>>> a.append(u)
++		>>> ar = a.getData()
++		>>> type(ar)
++		<type 'list'>
++		>>> ar[0] is u
++		True
++		'''
+ 		return self.__data
+ 
+ 	def setData(self, data):
++		'''
++		>>> a = Array()
++		>>> try:
++		... 	a.setData(None)
++		... except ValueError, e:
++		... 	print e
++		Array's can't have data set
++		'''
+ 		raise ValueError("Array's can't have data set")
+ 
++def _test():
++	import doctest
++	doctest.testmod()
++
++if __name__ == "__main__":
++	_test()
+
+
+
+From zxombie at users.berlios.de  Sun Oct  7 05:40:22 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sun, 7 Oct 2007 05:40:22 +0200
+Subject: r24 - in trunk/frontend/facund: . gui network
+Message-ID: <200710070340.l973eMkT022620@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-07 05:40:10 +0200 (Sun, 07 Oct 2007)
+New Revision: 24
+
+Modified:
+   trunk/frontend/facund/
+   trunk/frontend/facund/gui/
+   trunk/frontend/facund/network/
+Log:
+Ignore *.pyc
+
+
+Property changes on: trunk/frontend/facund
+___________________________________________________________________
+Name: svn:ignore
+   + *.pyc
+
+
+
+Property changes on: trunk/frontend/facund/gui
+___________________________________________________________________
+Name: svn:ignore
+   + *.pyc
+
+
+
+Property changes on: trunk/frontend/facund/network
+___________________________________________________________________
+Name: svn:ignore
+   + *.pyc
+
+
+
+
+From zxombie at users.berlios.de  Sat Oct 13 05:03:26 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sat, 13 Oct 2007 05:03:26 +0200
+Subject: r25 - trunk/backend
+Message-ID: <200710130303.l9D33Qh1028990@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-13 05:03:17 +0200 (Sat, 13 Oct 2007)
+New Revision: 25
+
+Added:
+   trunk/backend/facund-comms.c
+Log:
+Copy facund-be.c to facund-comms.c to split out the communications code
+
+Copied: trunk/backend/facund-comms.c (from rev 20, trunk/backend/facund-be.c)
+
+
+
+From zxombie at users.berlios.de  Sat Oct 13 05:18:26 2007
+From: zxombie at users.berlios.de (zxombie at users.berlios.de)
+Date: Sat, 13 Oct 2007 05:18:26 +0200
+Subject: r26 - trunk/backend
+Message-ID: <200710130318.l9D3IQtk029483@sheep.berlios.de>
+
+Author: zxombie
+Date: 2007-10-13 05:18:12 +0200 (Sat, 13 Oct 2007)
+New Revision: 26
+
+Added:
+   trunk/backend/facund-be.h
+Modified:
+   trunk/backend/Makefile
+   trunk/backend/facund-be.c
+   trunk/backend/facund-comms.c
+Log:
+Remove the non-comms code from the comms file and the comms code reom the non-comms file
+
+Modified: trunk/backend/Makefile
+===================================================================
+--- trunk/backend/Makefile	2007-10-13 03:03:17 UTC (rev 25)
++++ trunk/backend/Makefile	2007-10-13 03:18:12 UTC (rev 26)
+@@ -1,4 +1,5 @@
+ PROG=	facund-be
++SRCS=	facund-be.c facund-comms.c
+ 
+ CFLAGS+=-pthread -I${.CURDIR}/../lib
+ LDADD+=	-lbsdxml -lutil -lmd ${.OBJDIR}/../lib/libfacund.a
+
+Modified: trunk/backend/facund-be.c
+===================================================================
+--- trunk/backend/facund-be.c	2007-10-13 03:03:17 UTC (rev 25)
++++ trunk/backend/facund-be.c	2007-10-13 03:18:12 UTC (rev 26)
+@@ -25,6 +25,8 @@
+  *
+  */
+ 
++#include "facund-be.h"
++
+ #include <pthread.h>
+ 
+ #include <sys/types.h>
+@@ -66,38 +68,11 @@
+ static int	  facund_has_update(unsigned int);
+ static void	 *look_for_updates(void *);
+ static int	  facund_read_base_dirs(const char *);
+-static void	 *do_communication(void *);
+ 
+-static struct facund_response * facund_get_update_types(const char *,
+-    const struct facund_object *, int *, int *);
+-static const char **facund_get_dir_list(const struct facund_object *);
+-static struct facund_response *facund_read_type_directory(const char *,
+-    const struct facund_object *, const char ***, int *, int *);
+ 
+-static struct facund_response *facund_call_authenticate(const char *,
+-    struct facund_object *);
+-static struct facund_response *facund_call_ping(const char *,
+-    struct facund_object *);
+-static struct facund_response *facund_get_directories(const char *,
+-    struct facund_object *);
+-static struct facund_response *facund_call_list_updates(const char *,
+-    struct facund_object *);
+-static struct facund_response *facund_call_list_installed(const char *,
+-    struct facund_object *);
+-static struct facund_response *facund_call_install_patches(const char *,
+-    struct facund_object *);
+-static struct facund_response *facund_call_rollback_patches(const char *,
+-    struct facund_object *);
+-static struct facund_response *facund_call_get_services(const char *,
+-    struct facund_object *obj);
+-static struct facund_response *facund_call_restart_services(const char *,
+-    struct facund_object *);
+-
+ static int	facund_signals[] = { SIGHUP, SIGINT, SIGTERM };
+ static void	facund_signal_handler(int, siginfo_t *, void *);
+ 
+-static void	facund_comms_signal_handler(int, siginfo_t *, void *);
+-
+ struct fbsd_tag_line {
+ 	char	*tag_platform;
+ 	char	*tag_release;
+@@ -428,7 +403,7 @@
+  * a NULL terminated array of pointers to each directory
+  */
+ static int
+-facund_read_base_dirs(const char *str __unused)
++facund_read_base_dirs(const char *str)
+ {
+ 	const char *ptr, *next_ptr;
+ 	unsigned int pos, len;
+@@ -510,517 +485,7 @@
+ 	return -1;
+ }
+ 
+-/* When called the front end died without disconnecting
+- * Cleanup and wait for a new connection
+- */
+-static void
+-facund_comms_signal_handler(int sig __unused, siginfo_t *info __unused,
+-    void *uap __unused)
+-{
+-	facund_comms_in_loop = 0;
+-}
+-
+-static long facund_salt = 0;
+-
+-static void *
+-do_communication(void *data)
+-{
+-	struct sigaction sa;
+-	struct facund_conn *conn = (struct facund_conn *)data;
+-
+-	sa.sa_sigaction = facund_comms_signal_handler;
+-	sigemptyset(&sa.sa_mask);
+-	sa.sa_flags = SA_SIGINFO;
+-	sigaction(SIGPIPE, &sa, NULL);
+-
+-	while(1) {
+-		int ret = 0;
+-
+-		/* We are now in the loop. This will change on SIGPIPE */
+-		facund_comms_in_loop = 1;
+-
+-		assert(facund_salt == 0);
+-		do {
+-			facund_salt = random();
+-		} while (facund_salt == 0);
+-		if(facund_server_start(conn, facund_salt) == -1) {
+-			if (facund_in_loop != 0) {
+-				/*
+-				 * When we are not quiting tell
+-				 * the user there was a problem
+-				 */
+-				fprintf(stderr,
+-				    "ERROR: Couldn't start the connection\n");
+-			}
+-			break;
+-		}
+-		if (facund_comms_in_loop == 0) {
+-			facund_salt = 0;
+-			continue;
+-		}
+-
+-		while(ret == 0) {
+-			ret = facund_server_get_request(conn);
+-			if (ret == -1) {
+-				if (facund_in_loop != 0) {
+-					fprintf(stderr, "ERROR: Couldn't read "
+-					    "data from network\n");
+-				}
+-			}
+-			if (facund_comms_in_loop == 0)
+-				break;
+-		}
+-		facund_salt = 0;
+-		if (facund_comms_in_loop == 0)
+-			continue;
+-
+-		facund_server_finish(conn);
+-		if (facund_comms_in_loop == 0)
+-			continue;
+-		if (ret == -1)
+-			break;
+-	}
+-
+-	return NULL;
+-}
+-
+-static struct facund_response *
+-facund_call_authenticate(const char *id, struct facund_object *obj)
+-{
+-	char *buf, sum[65];
+-
+-	if (facund_salt == 0) {
+-		return facund_response_new(id, 1, "Already authenticated",NULL);
+-	}
+-	if (facund_object_get_type(obj) != FACUND_STRING) {
+-		return facund_response_new(id, 1, "Incorrect Data", NULL);
+-	}
+-
+-	/* Check the password */
+-	asprintf(&buf, "%s%ld", password_hash, facund_salt);
+-	SHA256_Data(buf, strlen(buf), sum);
+-	free(buf);
+-	printf("%s\n%s\n\n", sum, facund_object_get_string(obj));
+-	if (strcmp(sum, facund_object_get_string(obj)) != 0) {
+-		return facund_response_new(id, 1, "Incorrect Password", NULL);
+-	}
+-
+-	/* Add the callbacks for each call */
+-	facund_server_add_call("ping", facund_call_ping);
+-	facund_server_add_call("get_directories", facund_get_directories);
+-	facund_server_add_call("list_updates", facund_call_list_updates);
+-	facund_server_add_call("list_installed", facund_call_list_installed);
+-	facund_server_add_call("install_patches", facund_call_install_patches);
+-	facund_server_add_call("rollback_patches",facund_call_rollback_patches);
+-	facund_server_add_call("get_services", facund_call_get_services);
+-	facund_server_add_call("restart_services",facund_call_restart_services);
+-
+-	return facund_response_new(id, 0, "No Error", NULL);
+-}
+-
+-static struct facund_response *
+-facund_call_ping(const char *id, struct facund_object *obj __unused)
+-{
+-	struct facund_response *resp;
+-	struct facund_object *pong;
+-
+-	pong = facund_object_new_string();
+-	facund_object_set_string(pong, "pong");
+-	resp = facund_response_new(id, 0, "No error", pong);
+-	return resp;
+-}
+-
+-static struct facund_response *
+-facund_get_directories(const char *id, struct facund_object *obj __unused)
+-{
+-	struct facund_object *dirs, *item;
+-	unsigned int pos;
+-
+-	dirs = facund_object_new_array();
+-	for (pos = 0; pos < watched_db_count; pos++) {
+-		item = facund_object_new_string();
+-		facund_object_set_string(item, watched_db[pos].db_base);
+-		facund_object_array_append(dirs, item);
+-	}
+-	return facund_response_new(id, 0, "No Error", dirs);
+-}
+-
+-/*
+- * Takes either a facund array or a facund string and sets base
+- * or ports to true if they are contained in the object
+- */
+-static struct facund_response *
+-facund_get_update_types(const char *id, const struct facund_object *obj,
+-    int *base, int *ports)
+-{
+-	const struct facund_object *area_objs[2];
+-	const char *areas[2];
+-	enum facund_type type;
+-
+-	assert(base != NULL);
+-	assert(ports != NULL);
+-
+-	type = facund_object_get_type(obj);
+-	if (type == FACUND_ARRAY) {
+-		if (facund_object_array_size(obj) != 2) {
+-			return facund_response_new(id, 1,
+-			    "Wrong number of arguments", NULL);
+-		}
+-		area_objs[0] = facund_object_get_array_item(obj, 0);
+-		area_objs[1] = facund_object_get_array_item(obj, 1);
+-
+-		areas[0] = facund_object_get_string(area_objs[0]);
+-		areas[1] = facund_object_get_string(area_objs[1]);
+-
+-		if (strcmp(areas[0], "base") == 0 || strcmp(areas[1], "base"))
+-			*base = 1;
+-
+-		if (strcmp(areas[0], "ports") == 0 || strcmp(areas[1], "ports"))
+-			*ports = 1;
+-
+-	} else if (type == FACUND_STRING) {
+-		areas[0] = facund_object_get_string(obj);
+-		if (strcmp(areas[0], "base") == 0) {
+-			*base = 1;
+-		} else if (strcmp(areas[0], "ports") == 0) {
+-			*ports = 1;
+-		}
+-	} else {
+-		return facund_response_new(id, 1, "Incorrect data type", NULL);
+-	}
+-	return NULL;
+-}
+-
+-/*
+- * Takes a either facund array of string objects or a single string
+- * object and returns a C array of C strings of the objects
+- * TODO: Rename as it is a generic function to extract data from an array
+- */
+-static const char **
+-facund_get_dir_list(const struct facund_object *obj)
+-{
+-	const char **dirs;
+-	const struct facund_object *cur;
+-	size_t items, pos;
+-	assert(obj != NULL);
+-
+-	switch(facund_object_get_type(obj)) {
+-	case FACUND_STRING:
+-		dirs = malloc(2 * sizeof(char *));
+-		if (dirs == NULL)
+-			return NULL;
+-
+-		dirs[0] = facund_object_get_string(
+-		    __DECONST(struct facund_object *, obj));
+-		dirs[1] = NULL;
+-		break;
+-	case FACUND_ARRAY:
+-		items = facund_object_array_size(obj);
+-		if (items == 0)
+-			return NULL;
+-
+-		dirs = malloc((items + 1) * sizeof(char *));
+-		if (dirs == NULL)
+-			return NULL;
+-
+-		for (pos = 0;
+-		    (cur = facund_object_get_array_item(obj, pos)) != NULL;
+-		     pos++) {
+-			dirs[pos] = facund_object_get_string(cur);
+-		}
+-		dirs[pos] = NULL;
+-		assert(pos == items);
+-
+-		break;
+-	default:
+-		return NULL;
+-	}
+-	return dirs;
+-}
+-
+-static struct facund_response *
+-facund_read_type_directory(const char *id, const struct facund_object *obj,
+-    const char ***base_dirs, int *base, int *ports)
+-{
+-	const struct facund_object *cur;
+-	struct facund_response *ret;
+-	unsigned int pos;
+-
+-	assert(id != NULL);
+-	assert(obj != NULL);
+-	assert(base_dirs != NULL);
+-	assert(base != NULL);
+-	assert(ports != NULL);
+-
+-	if (facund_object_get_type(obj) != FACUND_ARRAY) {
+-		return facund_response_new(id, 1, "Bad data sent", NULL);
+-	}
+-
+-	for (pos = 0; (cur = facund_object_get_array_item(obj, pos)) != NULL;
+-	    pos++) {
+-		switch (pos) {
+-		case 0:
+-			/* Read in the type of updates to list */
+-			ret = facund_get_update_types(id, cur, base, ports);
+-			if (ret != NULL)
+-				return ret;
+-			break;
+-		case 1:
+-			/* Read in the directories to get updates for */
+-			*base_dirs = facund_get_dir_list(cur);
+-			if (*base_dirs == NULL)
+-				return facund_response_new(id, 1,
+-				    "Malloc failed", NULL);
+-			break;
+-		default:
+-			if (*base_dirs != NULL)
+-				free(*base_dirs);
+-
+-			return facund_response_new(id, 1, "Too many arguments",
+-			    NULL);
+-		}
+-	}
+-	if (pos != 2) {
+-		if (base_dirs != NULL)
+-			free(base_dirs);
+-		return facund_response_new(id, 1,
+-		    "Not enough arguments", NULL);
+-	}
+-	return NULL;
+-}
+-
+-static struct facund_response *
+-facund_call_list_updates(const char *id, struct facund_object *obj)
+-{
+-	struct facund_response *ret;
+-	struct facund_object *args;
+-	const char **base_dirs;
+-	int get_base, get_ports;
+-	unsigned int pos;
+-
+-	get_base = get_ports = 0;
+-	base_dirs = NULL;
+-
+-	if (obj == NULL) {
+-		/* TODO: Don't use magic numbers */
+-		return facund_response_new(id, 1, "No data sent", NULL);
+-	}
+-
+-	/* Read in the arguments */
+-	ret = facund_read_type_directory(id, obj, &base_dirs, &get_base,
+-	    &get_ports);
+-	if (ret != NULL) {
+-		if (base_dirs != NULL)
+-			free(base_dirs);
+-		return ret;
+-	}
+-	/* This should have been assigned as ret is NULL when successful */
+-	assert(base_dirs != NULL);
+-
+-	/*
+-	 * If any of these asserts fail there was
+-	 * incorrect logic checking arguments
+-	 */
+-	assert(get_ports == 1 || get_base == 1);
+-	assert(base_dirs[0] != NULL);
+-
+-	args = facund_object_new_array();
+-	for (pos = 0; base_dirs[pos] != NULL; pos++) {
+-		struct facund_object *pair, *item, *updates;
+-		unsigned int i;
+-		char *buf;
+-
+-		for (i = 0; i < watched_db_count; i++) {
+-			if (strcmp(watched_db[i].db_base, base_dirs[pos]) != 0)
+-				continue;
+-
+-			if (watched_db[i].db_next_patch == 0)
+-				break;
+-
+-			pair = facund_object_new_array();
+-
+-			/* Add the directory to the start of the array */
+-			item = facund_object_new_string();
+-			facund_object_set_string(item, base_dirs[pos]);
+-			facund_object_array_append(pair, item);
+-
+-			/* Add a list of updates to the array */
+-			updates = facund_object_new_array();
+-			item = facund_object_new_string();
+-			asprintf(&buf, "%s-p%u", facund_uname.release,
+-			    watched_db[i].db_next_patch);
+-			if (buf == NULL)
+-				return facund_response_new(id, 1,
+-				    "Malloc failed", NULL);
+-
+-			facund_object_set_string(item, buf);
+-			free(buf);
+-			facund_object_array_append(updates, item);
+-			facund_object_array_append(pair, updates);
+-
+-			/*
+-			 * Add the directory on to the
+-			 * end of the arguments to return
+-			 */
+-			facund_object_array_append(args, pair);
+-			break;
+-		}
+-	}
+-
+-	if (facund_object_array_size(args) == 0) {
+-		facund_object_free(args);
+-		args = NULL;
+-	}
+-
+-	free(base_dirs);
+-	return facund_response_new(id, RESP_GOOD, "Success", args);
+-}
+-
+-static struct facund_response *
+-facund_call_list_installed(const char *id, struct facund_object *obj)
+-{
+-	struct facund_response *ret;
+-	struct facund_object *args;
+-	const char **base_dirs;
+-	int get_base, get_ports;
+-	unsigned int pos;
+-
+-	get_base = get_ports = 0;
+-	base_dirs = NULL;
+-
+-	if (obj == NULL) {
+-		/* TODO: Don't use magic numbers */
+-		return facund_response_new(id, 1, "No data sent", NULL);
+-	}
+-
+-	/* Read in the arguments */
+-	ret = facund_read_type_directory(id, obj, &base_dirs, &get_base,
+-	    &get_ports);
+-	if (ret != NULL) {
+-		if (base_dirs != NULL)
+-			free(base_dirs);
+-		return ret;
+-	}
+-	/* This should have been assigned as ret is NULL when successful */
+-	assert(base_dirs != NULL);
+-
+-	/*
+-	 * If any of these asserts fail there was
+-	 * incorrect logic checking arguments
+-	 */
+-	assert(get_ports == 1 || get_base == 1);
+-	assert(base_dirs[0] != NULL);
+-
+-	args = facund_object_new_array();
+-	for (pos = 0; base_dirs[pos] != NULL; pos++) {
+-		struct facund_object *pair, *item, *updates;
+-		unsigned int i;
+-		char *buf;
+-
+-		for (i = 0; i < watched_db_count; i++) {
+-			unsigned int rollback_pos;
+-
+-			if (strcmp(watched_db[i].db_base, base_dirs[pos]) != 0)
+-				continue;
+-
+-			if (watched_db[i].db_rollback_count == 0)
+-				break;
+-
+-			pair = facund_object_new_array();
+-
+-			/* Add the directory to the start of the array */
+-			item = facund_object_new_string();
+-			facund_object_set_string(item, base_dirs[pos]);
+-			facund_object_array_append(pair, item);
+-
+-			/* Add a list of updates to the array */
+-			updates = facund_object_new_array();
+-
+-			for (rollback_pos = 0;
+-			     rollback_pos < watched_db[i].db_rollback_count;
+-			     rollback_pos++) {
+-				unsigned int level;
+-
+-				/* Calculate the patch level */
+-				level = watched_db[i].db_tag_line->tag_patch;
+-				level -= rollback_pos - 1;
+-				if (watched_db[i].db_next_patch > 0)
+-					level--;
+-
+-				asprintf(&buf, "%s-p%u", facund_uname.release,
+-				    level);
+-				if (buf == NULL)
+-					return facund_response_new(id, 1,
+-					    "Malloc failed", NULL);
+-
+-				/* Create the item and add it to the array */
+-				item = facund_object_new_string();
+-				facund_object_set_string(item, buf);
+-				facund_object_array_append(updates, item);
+-
+-				free(buf);
+-			}
+-			/* If there were no rollbacks we shouldn't be here */
+-			assert(rollback_pos > 0);
+-
+-			facund_object_array_append(pair, updates);
+-
+-			/*
+-			 * Add the directory on to the
+-			 * end of the arguments to return
+-			 */
+-			facund_object_array_append(args, pair);
+-			break;
+-		}
+-	}
+-	/* There are no updates avaliable */
+-	if (facund_object_array_size(args) == 0) {
+-		facund_object_free(args);
+-		args = NULL;
+-	}
+-
+-	free(base_dirs);
+-	return facund_response_new(id, RESP_GOOD, "Success", args);
+-}
+-
+-static struct facund_response *
+-facund_read_directory_patchlevel(const char *id,
+-    const struct facund_object *obj, const char **base_dir,
+-    const char ***patches)
+-{
+-	const struct facund_object *cur, *dir, *patch;
+-
+-	if (facund_object_get_type(obj) != FACUND_ARRAY) {
+-		return facund_response_new(id, 1, "Bad data sent", NULL);
+-	}
+-
+-	cur = facund_object_get_array_item(obj, 0);
+-	if (cur == NULL) {
+-		facund_response_new(id, 1, "Bad data sent", NULL);
+-	}
+-	if (facund_object_get_type(cur) == FACUND_STRING) {
+-		/* Get the data for this directory */
+-		dir = cur;
+-		patch = facund_object_get_array_item(obj, 1);
+-		if (patch == NULL) {
+-			return facund_response_new(id, 1, "Bad data sent",NULL);
+-		}
+-
+-		/* Get the directory and patch level */
+-		*base_dir = facund_object_get_string(dir);
+-		*patches = facund_get_dir_list(patch);
+-
+-		if (*base_dir == NULL || *patches == NULL) {
+-			return facund_response_new(id, 1, "Malloc failed",NULL);
+-		}
+-	} else {
+-		return facund_response_new(id, 1, "Bad data sent", NULL);
+-	}
+-
+-	return NULL;
+-}
+-
+-static int
++int
+ facund_run_update(const char *command, const char *basedir)
+ {
+ 	char *cmd, *arg;
+@@ -1048,254 +513,6 @@
+ 	return ret;
+ }
+ 
+-static struct facund_response *
+-facund_call_install_patches(const char *id, struct facund_object *obj)
+-{
+-	const char *base_dir, **patches;
+-	struct facund_response *ret;
+-	unsigned int pos;
+-	int failed;
+-
+-	if (obj == NULL) {
+-		/* TODO: Don't use magic numbers */
+-		return facund_response_new(id, 1, "No data sent", NULL);
+-	}
+-
+-	base_dir = NULL;
+-	patches = NULL;
+-	ret = facund_read_directory_patchlevel(id, obj, &base_dir, &patches);
+-	if (ret != NULL)
+-		return ret;
+-
+-	/* Check the directory is being watched */
+-	for (pos = 0; pos < watched_db_count; pos++) {
+-		if (strcmp(watched_db[pos].db_base, base_dir) == 0) {
+-			break;
+-		}
+-	}
+-	if (pos == watched_db_count) {
+-		return facund_response_new(id, 1, "Incorrect directory", NULL);
+-	}
+-
+-	/* In the all case we will install all avaliable patches */
+-	failed = 0;
+-	if (strcmp(patches[0], "base") == 0) {
+-		if (facund_run_update("install", base_dir) != 0) {
+-			failed = 1;
+-		}
+-	} else {
+-		return facund_response_new(id, 1, "Unsupported patch", NULL);
+-	}
+-
+-	if (failed != 0) {
+-		return facund_response_new(id, 1,
+-		    "Some updates failed to install", NULL);
+-	}
+-	return facund_response_new(id, 0, "All updates installed", NULL);
+-}
+-
+-static struct facund_response *
+-facund_call_rollback_patches(const char *id, struct facund_object *obj)
+-{
+-	const char *base_dir, **patches;
+-	struct facund_response *ret;
+-	unsigned int pos;
+-	int failed;
+-
+-	if (obj == NULL) {
+-		/* TODO: Don't use magic numbers */
+-		return facund_response_new(id, 1, "No data sent", NULL);
+-	}
+-
+-	base_dir = NULL;
+-	patches = NULL;
+-	ret = facund_read_directory_patchlevel(id, obj, &base_dir, &patches);
+-	if (ret != NULL)
+-		return ret;
+-
+-	/* Check the directory is being watched */
+-	for (pos = 0; pos < watched_db_count; pos++) {
+-		if (strcmp(watched_db[pos].db_base, base_dir) == 0) {
+-			break;
+-		}
+-	}
+-	if (pos == watched_db_count) {
+-		return facund_response_new(id, 1, "Incorrect directory", NULL);
+-	}
+-
+-	failed = 0;
+-
+-	if (strcmp(patches[0], "base") == 0) {
+-		/* Rollback the top most base patch */
+-		if (facund_run_update("rollback", base_dir) != 0) {
+-			failed = 1;
+-		}
+-	} else {
+-		return facund_response_new(id, 1, "Unsupported patch", NULL);
+-	}
+-
+-	if (failed != 0) {
+-		return facund_response_new(id, 1,
+-		    "Some patches failed to rollback", NULL);
+-	}
+-	return facund_response_new(id, 0, "Success", NULL);
+-}
+-
+-static struct facund_response *
+-facund_call_get_services(const char *id __unused, struct facund_object *obj __unused)
+-{
+-	struct facund_object *dirs, *cur_dir;
+-	const char *base_dir;
+-	struct dirent *de;
+-	unsigned int pos;
+-	DIR *d;
+-
+-	if (obj == NULL) {
+-		/* TODO: Don't use magic numbers */
+-		return facund_response_new(id, 1, "No data sent", NULL);
+-	}
+-
+-	/* Read in the base dir to get the services for */
+-	base_dir = NULL;
+-	if (facund_object_get_type(obj) != FACUND_STRING) {
+-		return facund_response_new(id, 1, "Incorrect data", NULL);
+-	}
+-	base_dir = facund_object_get_string(obj);
+-	if (base_dir == NULL) {
+-		return facund_response_new(id, 1, "Malloc failed", NULL);
+-	}
+-	if (strcmp(base_dir, "/") != 0) {
+-		return facund_response_new(id, 1,
+-		    "Can only restart services in /", NULL);
+-	}
+-	for (pos = 0; pos < watched_db_count; pos++) {
+-		if (strcmp(watched_db[pos].db_base, base_dir) == 0) {
+-			break;
+-		}
+-	}
+-	if (pos == watched_db_count) {
+-		return facund_response_new(id, 1, "Unknown base dir", NULL);
+-	}
+-
+-	d = opendir("/etc/rc.d/");
+-	if (d == NULL) {
+-		return facund_response_new(id, 1, "Could not open /etc/rc.d/",
+-		    NULL);
+-	}
+-
+-	dirs = facund_object_new_array();
+-	while ((de = readdir(d)) != NULL) {
+-		/* Don't look at hidden files */
+-		if (de->d_name[0] == '.')
+-			continue;
+-
+-		cur_dir = facund_object_new_string();
+-		facund_object_set_string(cur_dir, de->d_name);
+-		facund_object_array_append(dirs, cur_dir);
+-	}
+-	if (facund_object_array_size(dirs) == 0) {
+-		facund_object_free(dirs);
+-		return facund_response_new(id, 1, "No services found", NULL);
+-	}
+-
+-	return facund_response_new(id, 0, "Services found", dirs);
+-}
+-
+-static struct facund_response *
+-facund_call_restart_services(const char *id, struct facund_object *obj)
+-{
+-	const char *base_dir, *service;
+-	const struct facund_object *cur;
+-	char service_script[PATH_MAX], *cmd;
+-	unsigned int pos;
+-	struct stat sb;
+-
+-	if (obj == NULL) {
+-		/* TODO: Don't use magic numbers */
+-		return facund_response_new(id, 1, "No data sent", NULL);
+-	}
+-
+-	base_dir = NULL;
+-	service = NULL;
+-
+-	if (facund_object_get_type(obj) != FACUND_ARRAY) {
+-		return facund_response_new(id, 1, "Incorrect data", NULL);
+-	}
+-	if (facund_object_array_size(obj) != 2) {
+-		return facund_response_new(id, 1, "Incorrect data", NULL);
+-	}
+-
+-	/* Find the base dir */
+-	cur = facund_object_get_array_item(obj, 0);
+-	if (facund_object_get_type(cur) != FACUND_STRING) {
+-		return facund_response_new(id, 1, "Incorrect data", NULL);
+-	}
+-	base_dir = facund_object_get_string(cur);
+-	if (base_dir == NULL) {
+-		return facund_response_new(id, 1, "Malloc failed", NULL);
+-	}
+-	/*
+-	 * We can only restart a service if the base dir
+-	 * is / as we don't know how to signal any other's.
+-	 * eg. if it is in a jail we will have to use jexec
+-	 * but we don't know if this base is in a jail
+-	 */
+-	if (strcmp(base_dir, "/") != 0) {
+-		return facund_response_new(id, 1,
+-		    "Can only restart services in /", NULL);
+-	}
+-	for (pos = 0; pos < watched_db_count; pos++) {
+-		if (strcmp(watched_db[pos].db_base, base_dir) == 0) {
+-			break;
+-		}
+-	}
+-	if (pos == watched_db_count) {
+-		return facund_response_new(id, 1, "Unknown base dir", NULL);
+-	}
+-
+-	/* Find the service to restart */
+-	cur = facund_object_get_array_item(obj, 1);
+-	if (facund_object_get_type(cur) != FACUND_STRING) {
+-		return facund_response_new(id, 1, "Incorrect data", NULL);
+-	}
+-	service = facund_object_get_string(cur);
+-	if (service == NULL) {
+-		return facund_response_new(id, 1, "Malloc failed", NULL);
+-	}
+-	do {
+-		/* Try services in /etc/rc.d */
+-		snprintf(service_script, PATH_MAX, "/etc/rc.d/%s", service);
+-		if (stat(service_script, &sb) == 0) {
+-			break;
+-		}
+-		
+-		/* Try services in /usr/local/etc/rc.d */
+-		snprintf(service_script, PATH_MAX, "/usr/local/etc/rc.d/%s",
+-		    service);
+-		if (stat(service_script, &sb) == 0) {
+-			break;
+-		}
+-
+-		return facund_response_new(id, 1, "Unknown service", NULL);
+-	} while (0);
+-
+-	/* Attempt to restart the service */
+-	asprintf(&cmd, "%s restart", service_script);
+-	if (cmd == NULL) {
+-		return facund_response_new(id, 1, "Malloc failed", NULL);
+-	}
+-	seteuid(0);
+-	if (system(cmd) != 0) {
+-		free(cmd);
+-		seteuid(getuid());
+-		return facund_response_new(id, 1, "Service restart failed",
+-		    NULL);
+-	}
+-	free(cmd);
+-	seteuid(getuid());
+-	return facund_response_new(id, 0, "Service restart successful", NULL);
+-}
+-
+ static void
+ facund_signal_handler(int sig __unused, siginfo_t *info __unused,
+     void *uap __unused)
+
+Added: trunk/backend/facund-be.h
+===================================================================
+--- trunk/backend/facund-be.h	2007-10-13 03:03:17 UTC (rev 25)
++++ trunk/backend/facund-be.h	2007-10-13 03:18:12 UTC (rev 26)
+@@ -0,0 +1,41 @@
++/*
++ * Copyright (C) 2007 Andrew Turner
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ */
++
++#ifndef FACUND_BE_H
++#define FACUND_BE_H
++
++#include <facund_connection.h>
++#include <facund_object.h>
++#include <facund_response.h>
++
++void	*do_communication(void *);
++struct facund_response	*facund_call_authenticate(const char *,
++    struct facund_object *);
++
++int	 facund_run_update(const char *, const char *);
++
++#endif
+
+Modified: trunk/backend/facund-comms.c
+===================================================================
+--- trunk/backend/facund-comms.c	2007-10-13 03:03:17 UTC (rev 25)
++++ trunk/backend/facund-comms.c	2007-10-13 03:18:12 UTC (rev 26)
+@@ -25,6 +25,8 @@
+  *
+  */
+ 
++#include "facund-be.h"
++
+ #include <pthread.h>
+ 
+ #include <sys/types.h>
+@@ -48,10 +50,6 @@
+ #include <string.h>
+ #include <unistd.h>
+ 
+-#include <facund_connection.h>
+-#include <facund_object.h>
+-#include <facund_response.h>
+-
+ /* Check if there are updates every 30min  */
+ static const time_t default_check_period = 30 * 60;
+ 
+@@ -61,21 +59,12 @@
+ #define DEFAULT_CONFIG_FILE	"/etc/freebsd-update-control.conf"
+ #define UPDATE_DATA_DIR		"/var/db/freebsd-update"
+ 
+-static struct fbsd_tag_line *facund_tag_decode_line(const char *);
+-static void	  facund_tag_free(struct fbsd_tag_line *);
+-static int	  facund_has_update(unsigned int);
+-static void	 *look_for_updates(void *);
+-static int	  facund_read_base_dirs(const char *);
+-static void	 *do_communication(void *);
+-
+ static struct facund_response * facund_get_update_types(const char *,
+     const struct facund_object *, int *, int *);
+ static const char **facund_get_dir_list(const struct facund_object *);
+ static struct facund_response *facund_read_type_directory(const char *,
+     const struct facund_object *, const char ***, int *, int *);
+ 
+-static struct facund_response *facund_call_authenticate(const char *,
+-    struct facund_object *);
+ static struct facund_response *facund_call_ping(const char *,
+     struct facund_object *);
+ static struct facund_response *facund_get_directories(const char *,
+@@ -93,9 +82,6 @@
+ static struct facund_response *facund_call_restart_services(const char *,
+     struct facund_object *);
+ 
+-static int	facund_signals[] = { SIGHUP, SIGINT, SIGTERM };
+-static void	facund_signal_handler(int, siginfo_t *, void *);
+-
+ static void	facund_comms_signal_handler(int, siginfo_t *, void *);
+ 
+ struct fbsd_tag_line {
+@@ -128,388 +114,6 @@
+ static struct utsname facund_uname;
+ static char *password_hash = NULL;
+ 
+-/*
+- * Decodes the data in a line from the tag file
+- */
+-static struct fbsd_tag_line *
+-facund_tag_decode_line(const char *buf)
+-{
+-	struct fbsd_tag_line *line;
+-	unsigned int len, item;
+-	char *num_buf;
+-	const char *str, *ptr, *errstr;
+-
+-	if (buf == NULL)
+-		return NULL;
+-
+-	line = calloc(sizeof(struct fbsd_tag_line), 1);
+-	if (line == NULL)
+-		return NULL;
+-
+-	str = buf;
+-	ptr = NULL;
+-
+-	for (item = 0, ptr = strchr(str, '|'); ptr != NULL;
+-	    ptr = strchr(str, '|')) {
+-		len = ptr - str;
+-
+-		switch (item) {
+-		case 0:
+-			if (strncmp("freebsd-update", str, len) != 0)
+-				goto facund_decode_tag_line_exit;
+-			break;
+-		case 1:
+-			line->tag_platform = malloc(len + 1);
+-			if (line->tag_platform == NULL)
+-				goto facund_decode_tag_line_exit;
+-
+-			strlcpy(line->tag_platform, str, len + 1);
+-			break;
+-		case 2:
+-			line->tag_release = malloc(len + 1);
+-			if (line->tag_release == NULL)
+-				goto facund_decode_tag_line_exit;
+-
+-			strlcpy(line->tag_release, str, len + 1);
+-			break;
+-		case 3:
+-			num_buf = malloc(len + 1);
+-			if (num_buf == NULL)
+-				goto facund_decode_tag_line_exit;
+-
+-			strlcpy(num_buf, str, len + 1);
+-			line->tag_patch = strtonum(num_buf, 0, UINT_MAX,
+-			    &errstr);
+-			free(num_buf);
+-			if (errstr != NULL)
+-				goto facund_decode_tag_line_exit;
+-			break;
+-		case 4:
+-			if (len != 64)
+-				goto facund_decode_tag_line_exit;
+-
+-			strlcpy(line->tag_tindexhash, str, 65);
+-			break;
+-		}
+-
+-		str = ptr + 1;
+-		item++;
+-	}
+-	if (item != 5) {
+-		goto facund_decode_tag_line_exit;
+-	} else {
+-		if (strlen(str) != 11)
+-			goto facund_decode_tag_line_exit;
+-
+-		strlcpy(line->tag_eol, str, 11);
+-	}
+-
+-	return line;
+-
+-facund_decode_tag_line_exit:
+-	/* Clean up on failure */
+-	facund_tag_free(line);
+-
+-	return NULL;
+-}
+-
+-static void
+-facund_tag_free(struct fbsd_tag_line *line)
+-{
+-	if (line == NULL)
+-		return;
+-
+-	if (line->tag_platform != NULL)
+-		free(line->tag_platform);
+-
+-	if (line->tag_release != NULL)
+-		free(line->tag_release);
+-
+-	free(line);
+-}
+-
+-/*
+- * Looks for updates on the system with a root of basedir
+- */
+-static int
+-facund_has_update(unsigned int pos)
+-{
+-	struct stat sb;
+-	FILE *tag_fd;
+-	char install_link[PATH_MAX], sha_base[PATH_MAX], sum[65], buf[1024];
+-	char link_target[PATH_MAX];
+-	struct fbsd_tag_line *line;
+-	unsigned int rollback_count;
+-	int link_len;
+-
+-	assert(pos < watched_db_count);
+-	snprintf(sha_base, PATH_MAX, "%s\n", watched_db[pos].db_base);
+-	SHA256_Data(sha_base, strlen(sha_base), sum);
+-
+-	/* Read in the tag file */
+-	tag_fd = fopen(watched_db[pos].db_tag_file, "r");
+-	if (tag_fd != NULL) {
+-		if (watched_db[pos].db_tag_line != NULL)
+-			facund_tag_free(watched_db[pos].db_tag_line);
+-
+-		while (fgets(buf, sizeof buf, tag_fd) != NULL) {
+-			line = facund_tag_decode_line(buf);
+-			watched_db[pos].db_tag_line = line;
+-		}
+-		fclose(tag_fd);
+-	}
+-	
+-	seteuid(0);
+-
+-	/* Look for the install link and check if it is a symlink */
+-	snprintf(install_link, PATH_MAX, "%s/%s-install",
+-	    watched_db[pos].db_dir, sum);
+-	if (watched_db[pos].db_tag_line != NULL &&
+-	    lstat(install_link, &sb) == 0 && S_ISLNK(sb.st_mode)) {
+-		watched_db[pos].db_next_patch =
+-		    watched_db[pos].db_tag_line->tag_patch;
+-	} else {
+-		watched_db[pos].db_next_patch = 0;
+-	}
+-
+-	/* Look for the rollback link and check if it is a symlink */
+-	snprintf(install_link, PATH_MAX, "%s/%s-rollback",
+-	    watched_db[pos].db_dir, sum);
+-	rollback_count = 0;
+-	errno = 0;
+-	while ((lstat(install_link, &sb) == 0) && S_ISLNK(sb.st_mode)) {
+-		rollback_count++;
+-		link_len = readlink(install_link, link_target,
+-		    (sizeof link_target) - 1);
+-		if (link_len == -1) {
+-			return -1;
+-		}
+-		link_target[link_len] = '\0';
+-		snprintf(install_link, PATH_MAX, "%s/%s/rollback",
+-		    watched_db[pos].db_dir, link_target);
+-		errno = 0;
+-	}
+-	if (errno != 0 && errno != ENOENT)
+-		return -1;
+-
+-	seteuid(getuid());
+-
+-	watched_db[pos].db_rollback_count = rollback_count;
+-
+-	return 0;
+-}
+-
+-/*
+- * Loops looking for updates.
+- * There are two ways, the first is to use kqueue to wait
+- * for an EVFILT_VNODE event on the database directory with
+- * a timeout to allow for the directory to have changed
+- * between the time we last checked for updates and the
+- * call to kqueue. The second is to sleep for a set time
+- * period. The only advantage the kqueue method has over
+- * sleeping is we may see the update sooner this way.
+- */
+-void *
+-look_for_updates(void *data __unused)
+-{
+-	struct timespec timeout;
+-	int kq, use_kqueue;
+-	struct kevent event, changes;
+-	size_t pos, signals;
+-	int error, first_loop;
+-
+-	signals = 1;
+-
+-	/* Create the kqueue to wait for events */
+-	kq = kqueue();
+-	if (kq == -1)
+-		use_kqueue = 0;
+-
+-	for (pos = 0; pos < watched_db_count; pos++) {
+-		watched_db[pos].db_fd = open(watched_db[pos].db_dir, O_RDONLY);
+-
+-		/* Create an event to look for files being added to the dir */
+-		EV_SET(&event, watched_db[pos].db_fd, EVFILT_VNODE,
+-		    EV_ADD | EV_CLEAR, NOTE_WRITE | NOTE_DELETE | NOTE_EXTEND,
+-		    0, (void *)pos);
+-
+-		kevent(kq, &event, 1, NULL, 0, NULL);
+-	}
+-
+-	/* Add a signal event to check if there was a signal sent */
+-	EV_SET(&event, SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, NULL);
+-	kevent(kq, &event, 1, NULL, 0, NULL);
+-	for (pos = 0; pos < sizeof(facund_signals) / sizeof(facund_signals[0]);
+-	    pos++) {
+-		EV_SET(&event, facund_signals[pos], EVFILT_SIGNAL, EV_ADD,
+-		    0, 0, NULL);
+-		kevent(kq, &event, 1, NULL, 0, NULL);
+-	}
+-
+-	use_kqueue = 1;
+-
+-	timeout.tv_sec = default_check_period;
+-	timeout.tv_nsec = 0;
+-
+-	/* Scan all directories on the first run */
+-	pos = watched_db_count;
+-
+-	first_loop = 1;
+-
+-	/*
+-	 * This is the main loop to check for updates. It will
+-	 * either wait for file system activity on the update
+-	 * directories of just sleep for a fixed amount of time
+-	 * then scan all directories.
+-	 */
+-	while(facund_in_loop != 0) {
+-		assert(pos <= watched_db_count);
+-		if (use_kqueue == 0 || pos == watched_db_count) {
+-			/*
+-			 * We are using sleep to wait for updates or
+-			 * kqueue timed out. This means we have to check
+-			 * all directories to see if they have an update.
+-			 */
+-			for (pos = 0; pos < watched_db_count; pos++) {
+-				facund_has_update(pos);
+-			}
+-			/* Check we have looked at all directories */
+-			assert(pos == watched_db_count);
+-		} else {
+-			/*
+-			 * We are using kqueue to wait for updates.
+-			 * pos will contain the position in base_dirs of
+-			 * the directory that had file system activity.
+-			 */
+-			if (pos < watched_db_count) {
+-				facund_has_update(pos);
+-			}
+-		}
+-		pos = watched_db_count;
+-
+-		/*
+-		 * Before we sleep again check if we are to stop running
+-		 */
+-		if (facund_in_loop == 0) {
+-			break;
+-		}
+-
+-		/* Wait for posible updates */
+-		if (use_kqueue == 1) {
+-			/* Wait for posible updates ready to be installed */
+-			/* There are no changes, use the same events */
+-			error = kevent(kq, NULL, 0, &changes, 1, &timeout);
+-
+-			if (error == -1) {
+-				/*
+-				 * There was an error in
+-				 * kqueue, change to sleep
+-				 */
+-				use_kqueue = 0;
+-			} else if (error > 0) {
+-				if (changes.filter == EVFILT_VNODE) {
+-					/* Find in the item that changed */
+-					pos = (size_t)changes.udata;
+-				}
+-			}
+-		} else {
+-			sleep(default_check_period);
+-		}
+-	}
+-
+-	for (pos = 0; pos < watched_db_count; pos++) {
+-		close(watched_db[pos].db_fd);
+-	}
+-	return NULL;
+-}
+-
+-/*
+- * Takes in a string of space seperated directories and returns
+- * a NULL terminated array of pointers to each directory
+- */
+-static int
+-facund_read_base_dirs(const char *str __unused)
+-{
+-	const char *ptr, *next_ptr;
+-	unsigned int pos, len;
+-
+-	/* An empty string will contain no directories */
+-	if (str == NULL || str[0] == '\0')
+-		return -1;
+-
+-	/* Check we havn't already read in the directories */
+-	if (watched_db_count != 0 || watched_db != NULL)
+-		return -1;
+-
+-	ptr = str;
+-	while (ptr != NULL) {
+-		/* Skip leading spaces */
+-		while (ptr[0] == ' ')
+-			*ptr++;
+-
+-		ptr = strchr(ptr, ' ');
+-		watched_db_count++;
+-	}
+-
+-	/*
+-	 * There must be at least one directory utherwise
+-	 * the empty string check would have returned
+-	 */
+-	assert(watched_db_count > 0);
+-
+-	/* create an array to hold pointers to the dir names */
+-	watched_db = calloc(watched_db_count,
+-	    sizeof(struct fbsd_update_db));
+-
+-	/* Set the point the ret array to the directories */
+-	ptr = str;
+-	pos = 0;
+-	while (ptr != NULL) {
+-		/* Skip leading spaces */
+-		while (ptr[0] == ' ')
+-			*ptr++;
+-
+-		next_ptr = strchr(ptr, ' ');
+-		if (next_ptr == NULL) {
+-			next_ptr = strchr(ptr, '\0');
+-		}
+-		assert(next_ptr > ptr);
+-		len = next_ptr - ptr;
+-		len++;
+-
+-		watched_db[pos].db_base = calloc(len, sizeof(char *));
+-		if (watched_db[pos].db_base == NULL) {
+-			/* TODO: Clean up */
+-			return -1;
+-		}
+-		strlcpy(watched_db[pos].db_base, ptr, len);
+-		asprintf(&watched_db[pos].db_dir, "%s" UPDATE_DATA_DIR,
+-		    watched_db[pos].db_base);
+-		if (watched_db[pos].db_dir == NULL) {
+-			free(watched_db[pos].db_base);
+-			return -1;
+-		}
+-
+-		asprintf(&watched_db[pos].db_tag_file, "%s/tag",
+-		    watched_db[pos].db_dir);
+-		if (watched_db[pos].db_dir == NULL) {
+-			free(watched_db[pos].db_base);
+-			free(watched_db[pos].db_dir);
+-			return -1;
+-		}
+-
+-		watched_db[pos].db_next_patch = 0;
+-
+-		ptr = next_ptr;
+-		if (ptr[0] == '\0') {
+-			return 0;
+-		}
+-
+-		pos++;
+-	}
+-	return -1;
+-}
+-
+ /* When called the front end died without disconnecting
+  * Cleanup and wait for a new connection
+  */
+@@ -522,7 +126,7 @@
+ 
+ static long facund_salt = 0;
+ 
+-static void *
++void *
+ do_communication(void *data)
+ {
+ 	struct sigaction sa;
+@@ -584,7 +188,7 @@
+ 	return NULL;
+ }
+ 
+-static struct facund_response *
++struct facund_response *
+ facund_call_authenticate(const char *id, struct facund_object *obj)
+ {
+ 	char *buf, sum[65];
+@@ -1020,34 +624,6 @@
+ 	return NULL;
+ }
+ 
+-static int
+-facund_run_update(const char *command, const char *basedir)
+-{
+-	char *cmd, *arg;
+-	int ret;
+-
+-	assert(command != NULL);
+-#define FREEBSD_COMMAND "/usr/sbin/freebsd-update"
+-	arg = NULL;
+-	if (basedir != NULL) {
+-		asprintf(&arg, "-b %s", basedir);
+-		if (arg == NULL)
+-			return -1;
+-	}
+-	asprintf(&cmd, FREEBSD_COMMAND " %s %s", (arg == NULL ? "" : arg),
+-	    command);
+-
+-	free(arg);
+-	if (cmd == NULL) {
+-		return -1;
+-	}
+-
+-	ret = system(cmd);
+-	free(cmd);
+-
+-	return ret;
+-}
+-
+ static struct facund_response *
+ facund_call_install_patches(const char *id, struct facund_object *obj)
+ {
+@@ -1296,138 +872,3 @@
+ 	return facund_response_new(id, 0, "Service restart successful", NULL);
+ }
+ 
+-static void
+-facund_signal_handler(int sig __unused, siginfo_t *info __unused,
+-    void *uap __unused)
+-{
+-	facund_in_loop = 0;
+-}
+-
+-int
+-main(int argc, char *argv[])
+-{
+-	struct sigaction sa;
+-	pthread_t update_thread, comms_thread;
+-	struct facund_conn *conn;
+-	const char *config_file;
+-	char *basedirs_string, *uname_r;
+-	unsigned int pos;
+-	int config_fd;
+-	properties config_data;
+-	char ch;
+-
+-	/* Drop privileges */
+-	seteuid(getuid());
+-
+-	config_file = DEFAULT_CONFIG_FILE;
+-
+-	while ((ch = getopt(argc, argv, "c:h")) != -1) {
+-		switch(ch) {
+-		case 'c':
+-			config_file = optarg;
+-			break;
+-		case 'h':
+-		default:
+-			fprintf(stderr, "usage: %s [-c config]\n",
+-			    getprogname());
+-			exit(1);
+-		}
+-	}
+-	argc -= optind;
+-	argv += optind;
+-
+-	basedirs_string = NULL;
+-
+-	for (pos = 0; pos < sizeof(facund_signals) / sizeof(facund_signals[0]);
+-	    pos++) {
+-		sa.sa_sigaction = facund_signal_handler;
+-		sigemptyset(&sa.sa_mask);
+-		sa.sa_flags = SA_SIGINFO;
+-		sigaction(facund_signals[pos], &sa, NULL);
+-	}
+-
+-	/* Read in the config file */
+-	config_fd = open(config_file, O_RDONLY);
+-	if (config_fd == -1 && errno != ENOENT) {
+-		errx(1, "Could not open the config file");
+-	} else if (config_fd != -1) {
+-		/* Read in the config file */
+-		config_data = properties_read(config_fd);
+-
+-		if (config_data == NULL) {
+-			errx(1, "Could not read the config file");
+-		}
+-
+-		basedirs_string = property_find(config_data, "base_dirs");
+-		if (basedirs_string == NULL) {
+-			errx(1, "Incorrect config file");
+-		}
+-		basedirs_string = strdup(basedirs_string);
+-		if (basedirs_string == NULL) {
+-			errx(1, "Malloc failed");
+-		}
+-
+-		password_hash = property_find(config_data, "password");
+-		if (password_hash != NULL) {
+-			password_hash = strdup(password_hash);
+-			if (password_hash == NULL) {
+-				errx(1, "Malloc failed");
+-			}
+-		}
+-
+-		properties_free(config_data);
+-	}
+-
+-	/* Read in the base dirs */
+-	if (facund_read_base_dirs(basedirs_string) != 0) {
+-		errx(1, "No base dirs were given, set base_dirs in %s",
+-		    config_file);
+-	}
+-
+-	/* Create the data connection */
+-	conn = facund_connect_server("/tmp/facund");
+-	if (conn == NULL) {
+-		errx(1, "Could not open a socket: %s\n", strerror(errno));
+-	}
+-	chmod("/tmp/facund", 0777);
+-
+-	/* Get the uname data */
+-	if (uname(&facund_uname) != 0) {
+-		errx(1, "Could not get the Operating System version\n");
+-	}
+-	uname_r = getenv("UNAME_r");
+-	if (uname_r != NULL) {
+-		strlcpy(facund_uname.release, uname_r,
+-		    sizeof facund_uname.release);
+-	}
+-
+-	/* Only allow people to authenticate to begin with */
+-	facund_server_add_call("authenticate", facund_call_authenticate);
+-
+-	pthread_create(&update_thread, NULL, look_for_updates, NULL);
+-	pthread_create(&comms_thread, NULL, do_communication, conn);
+-
+-	/* Wait for the threads to quit */
+-	pthread_join(comms_thread, NULL);
+-	/*
+-	 * As the communications thread has quit we should
+-	 * also kill the update thread so we can exit
+-	 */
+-	pthread_kill(update_thread, SIGINT);
+-	pthread_join(update_thread, NULL);
+-
+-	if (watched_db != NULL) {
+-		for (pos = 0; pos < watched_db_count; pos++) {
+-			free(watched_db[pos].db_base);
+-			free(watched_db[pos].db_dir);
+-		}
+-		free(watched_db);
+-	}
+-
+-	if (conn != NULL)
+-		facund_cleanup(conn);
+-
+-	free(basedirs_string);
+-	return 0;
+-}
+-
+
+
+

@@ -1,0 +1,180 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r10 - trunk/lib/test
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r10%20-%20trunk/lib/test&In-Reply-To=%3C200708290305.l7T35Tja013302%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000003.html">
+   <LINK REL="Next"  HREF="000005.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r10 - trunk/lib/test</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r10%20-%20trunk/lib/test&In-Reply-To=%3C200708290305.l7T35Tja013302%40sheep.berlios.de%3E"
+       TITLE="r10 - trunk/lib/test">zxombie at users.berlios.de
+       </A><BR>
+    <I>Wed Aug 29 05:05:29 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000003.html">r9 - trunk/lib
+</A></li>
+        <LI>Next message: <A HREF="000005.html">r11 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4">[ date ]</a>
+              <a href="thread.html#4">[ thread ]</a>
+              <a href="subject.html#4">[ subject ]</a>
+              <a href="author.html#4">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-08-29 05:05:24 +0200 (Wed, 29 Aug 2007)
+New Revision: 10
+
+Modified:
+   trunk/lib/test/test_facund_connection.c
+Log:
+Add tests to check sending messages over the socket works
+
+Modified: trunk/lib/test/test_facund_connection.c
+===================================================================
+--- trunk/lib/test/test_facund_connection.c	2007-08-29 02:24:35 UTC (rev 9)
++++ trunk/lib/test/test_facund_connection.c	2007-08-29 03:05:24 UTC (rev 10)
+@@ -29,7 +29,13 @@
+ 
+ #include &lt;facund_connection.h&gt;
+ 
+-/* Tests for a facund_connection server */
++#include &lt;sys/stat.h&gt;
++
++#include &lt;string.h&gt;
++
++/*
++ * Tests for a facund_connection server
++ */
+ START_TEST(pkg_freebsd_connection_server_null)
+ {
+ 	/* Check a NULL argument returns NULL */
+@@ -37,7 +43,25 @@
+ }
+ END_TEST
+ 
+-/* Tests for a facund_connection client */
++START_TEST(pkg_freebsd_connection_server_good)
++{
++	struct facund_conn *conn;
++	struct stat sb;
++
++	fail_unless((conn = facund_connect_server(&quot;/tmp/facund_test&quot;)) != NULL,
++	    NULL);
++	fail_unless(lstat(&quot;/tmp/facund_test&quot;, &amp;sb) == 0, NULL);
++	fail_unless(S_ISSOCK(sb.st_mode), NULL);
++	facund_cleanup(conn);
++
++	/* Check the socket is cleaned up */
++	fail_unless(lstat(&quot;/tmp/facund_test&quot;, &amp;sb) == -1, NULL);
++}
++END_TEST
++
++/*
++ * Tests for a facund_connection client
++ */
+ START_TEST(pkg_freebsd_connection_client_null)
+ {
+ 	/* Check a NULL argument returns NULL */
+@@ -48,10 +72,41 @@
+ START_TEST(pkg_freebsd_connection_client_nonexistant)
+ {
+ 	/* Check a non-existant socket returns NULL */
+-	fail_unless(facund_connect_server(&quot;/nonexistant&quot;) == NULL);
++	fail_unless(facund_connect_client(&quot;/nonexistant&quot;) == NULL, NULL);
+ }
+ END_TEST
+ 
++/*
++ * Tests for both working together
++ */
++START_TEST(pkg_freebsd_connection_cs_connects)
++{
++	char buf[5];
++
++	struct facund_conn *conn_s, *conn_c;
++	fail_unless((conn_s = facund_connect_server(&quot;/tmp/facund_test&quot;))
++	    != NULL, NULL);
++	fail_unless((conn_c = facund_connect_client(&quot;/tmp/facund_test&quot;))
++	    != NULL, NULL);
++	fail_unless(facund_accept(conn_s) == 0, NULL);
++
++	/* Test sending Client -&gt; Server works */
++	fail_unless(facund_send(conn_c, &quot;test&quot;, 4) == 4, NULL);
++	fail_unless(facund_recv(conn_s, buf, 4) == 4, NULL);
++	buf[4] = '\0';
++	fail_unless(strcmp(buf, &quot;test&quot;) == 0, NULL);
++
++	/* Test sending Server -&gt; Client works */
++	fail_unless(facund_send(conn_s, &quot;mesg&quot;, 4) == 4, NULL);
++	fail_unless(facund_recv(conn_c, buf, 4) == 4, NULL);
++	buf[4] = '\0';
++	fail_unless(strcmp(buf, &quot;mesg&quot;) == 0, NULL);
++
++	facund_close(conn_c);
++	facund_cleanup(conn_s);
++}
++END_TEST
++
+ Suite *
+ facund_connection_suite()
+ {
+@@ -62,13 +117,18 @@
+ 
+ 	tc = tcase_create(&quot;server&quot;);
+ 	tcase_add_test(tc, pkg_freebsd_connection_server_null);
++	tcase_add_test(tc, pkg_freebsd_connection_server_good);
+ 	suite_add_tcase(s, tc);
+ 
+-	tc = tcase_create(&quot;server&quot;);
++	tc = tcase_create(&quot;client&quot;);
+ 	tcase_add_test(tc, pkg_freebsd_connection_client_null);
+ 	tcase_add_test(tc, pkg_freebsd_connection_client_nonexistant);
+ 	suite_add_tcase(s, tc);
+ 
++	tc = tcase_create(&quot;client server&quot;);
++	tcase_add_test(tc, pkg_freebsd_connection_cs_connects);
++	suite_add_tcase(s, tc);
++
+ 	return s;
+ }
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000003.html">r9 - trunk/lib
+</A></li>
+	<LI>Next message: <A HREF="000005.html">r11 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4">[ date ]</a>
+              <a href="thread.html#4">[ thread ]</a>
+              <a href="subject.html#4">[ subject ]</a>
+              <a href="author.html#4">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>

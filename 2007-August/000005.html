@@ -1,0 +1,663 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r11 - trunk/lib/test
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r11%20-%20trunk/lib/test&In-Reply-To=%3C200708290551.l7T5pCl4000588%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000004.html">
+   <LINK REL="Next"  HREF="000006.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r11 - trunk/lib/test</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r11%20-%20trunk/lib/test&In-Reply-To=%3C200708290551.l7T5pCl4000588%40sheep.berlios.de%3E"
+       TITLE="r11 - trunk/lib/test">zxombie at users.berlios.de
+       </A><BR>
+    <I>Wed Aug 29 07:51:12 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000004.html">r10 - trunk/lib/test
+</A></li>
+        <LI>Next message: <A HREF="000006.html">r12 - trunk/lib
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#5">[ date ]</a>
+              <a href="thread.html#5">[ thread ]</a>
+              <a href="subject.html#5">[ subject ]</a>
+              <a href="author.html#5">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-08-29 07:50:57 +0200 (Wed, 29 Aug 2007)
+New Revision: 11
+
+Added:
+   trunk/lib/test/test_facund_response.c
+Modified:
+   trunk/lib/test/Makefile
+   trunk/lib/test/main.c
+   trunk/lib/test/test.h
+   trunk/lib/test/test_facund_connection.c
+   trunk/lib/test/test_facund_object.c
+Log:
+Fix the name's of the tests
+Add tests for a facund_response
+
+
+Modified: trunk/lib/test/Makefile
+===================================================================
+--- trunk/lib/test/Makefile	2007-08-29 03:05:24 UTC (rev 10)
++++ trunk/lib/test/Makefile	2007-08-29 05:50:57 UTC (rev 11)
+@@ -1,5 +1,6 @@
+ PROG=	tests
+-SRCS=	main.c test_facund_connection.c test_facund_object.c
++SRCS=	main.c test_facund_connection.c test_facund_object.c \
++	test_facund_response.c
+ 
+ WARNS?=		6
+ 
+
+Modified: trunk/lib/test/main.c
+===================================================================
+--- trunk/lib/test/main.c	2007-08-29 03:05:24 UTC (rev 10)
++++ trunk/lib/test/main.c	2007-08-29 05:50:57 UTC (rev 11)
+@@ -37,6 +37,7 @@
+ 
+ 	sr = srunner_create(facund_connection_suite());
+ 	srunner_add_suite(sr, facund_object_suite());
++	srunner_add_suite(sr, facund_response_suite());
+ 
+ 	srunner_run_all(sr, CK_NORMAL);
+ 	fail_count = srunner_ntests_failed(sr);
+
+Modified: trunk/lib/test/test.h
+===================================================================
+--- trunk/lib/test/test.h	2007-08-29 03:05:24 UTC (rev 10)
++++ trunk/lib/test/test.h	2007-08-29 05:50:57 UTC (rev 11)
+@@ -32,5 +32,6 @@
+ 
+ Suite *facund_connection_suite(void);
+ Suite *facund_object_suite(void);
++Suite *facund_response_suite(void);
+ 
+ #endif /* FACND_TEST_H */
+
+Modified: trunk/lib/test/test_facund_connection.c
+===================================================================
+--- trunk/lib/test/test_facund_connection.c	2007-08-29 03:05:24 UTC (rev 10)
++++ trunk/lib/test/test_facund_connection.c	2007-08-29 05:50:57 UTC (rev 11)
+@@ -36,14 +36,14 @@
+ /*
+  * Tests for a facund_connection server
+  */
+-START_TEST(pkg_freebsd_connection_server_null)
++START_TEST(facund_connection_server_null)
+ {
+ 	/* Check a NULL argument returns NULL */
+ 	fail_unless(facund_connect_server(NULL) == NULL);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_connection_server_good)
++START_TEST(facund_connection_server_good)
+ {
+ 	struct facund_conn *conn;
+ 	struct stat sb;
+@@ -62,14 +62,14 @@
+ /*
+  * Tests for a facund_connection client
+  */
+-START_TEST(pkg_freebsd_connection_client_null)
++START_TEST(facund_connection_client_null)
+ {
+ 	/* Check a NULL argument returns NULL */
+ 	fail_unless(facund_connect_client(NULL) == NULL);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_connection_client_nonexistant)
++START_TEST(facund_connection_client_nonexistant)
+ {
+ 	/* Check a non-existant socket returns NULL */
+ 	fail_unless(facund_connect_client(&quot;/nonexistant&quot;) == NULL, NULL);
+@@ -79,7 +79,7 @@
+ /*
+  * Tests for both working together
+  */
+-START_TEST(pkg_freebsd_connection_cs_connects)
++START_TEST(facund_connection_cs_connects)
+ {
+ 	char buf[5];
+ 
+@@ -116,17 +116,17 @@
+ 	s = suite_create(&quot;facund_connection&quot;);
+ 
+ 	tc = tcase_create(&quot;server&quot;);
+-	tcase_add_test(tc, pkg_freebsd_connection_server_null);
+-	tcase_add_test(tc, pkg_freebsd_connection_server_good);
++	tcase_add_test(tc, facund_connection_server_null);
++	tcase_add_test(tc, facund_connection_server_good);
+ 	suite_add_tcase(s, tc);
+ 
+ 	tc = tcase_create(&quot;client&quot;);
+-	tcase_add_test(tc, pkg_freebsd_connection_client_null);
+-	tcase_add_test(tc, pkg_freebsd_connection_client_nonexistant);
++	tcase_add_test(tc, facund_connection_client_null);
++	tcase_add_test(tc, facund_connection_client_nonexistant);
+ 	suite_add_tcase(s, tc);
+ 
+ 	tc = tcase_create(&quot;client server&quot;);
+-	tcase_add_test(tc, pkg_freebsd_connection_cs_connects);
++	tcase_add_test(tc, facund_connection_cs_connects);
+ 	suite_add_tcase(s, tc);
+ 
+ 	return s;
+
+Modified: trunk/lib/test/test_facund_object.c
+===================================================================
+--- trunk/lib/test/test_facund_object.c	2007-08-29 03:05:24 UTC (rev 10)
++++ trunk/lib/test/test_facund_object.c	2007-08-29 05:50:57 UTC (rev 11)
+@@ -107,7 +107,7 @@
+ /*
+  * Tests for a boolean facund_object
+  */
+-START_TEST(pkg_freebsd_object_bool_null)
++START_TEST(facund_object_bool_null)
+ {
+ 	/* Test if bool functions will fail correctly when passes NULL */
+ 	fail_unless(facund_object_set_bool(NULL, 0) == -1, NULL);
+@@ -116,13 +116,13 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_bool_create)
++START_TEST(facund_object_bool_create)
+ {
+ 	test_object_create(bool, FACUND_BOOL, -1);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_bool_true)
++START_TEST(facund_object_bool_true)
+ {
+ 	struct facund_object *obj;
+ 
+@@ -138,14 +138,14 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_bool_false)
++START_TEST(facund_object_bool_false)
+ {
+ 	/* Test accessing an object set to false will succeed */
+ 	test_object_assign(bool, &quot;bool&quot;, 0, &quot;false&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_bool_true_from_str)
++START_TEST(facund_object_bool_true_from_str)
+ {
+ 	/* Test accessing an object set to false from a string will succeed*/
+ 	test_object_assign_from_string(bool, &quot;bool&quot;, 1, &quot;true&quot;, &quot;true&quot;);
+@@ -154,7 +154,7 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_bool_false_from_str)
++START_TEST(facund_object_bool_false_from_str)
+ {
+ 	/* Test accessing an object set to false from a string will succeed*/
+ 	test_object_assign_from_string(bool, &quot;bool&quot;, 0, &quot;false&quot;, &quot;false&quot;);
+@@ -164,7 +164,7 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_bool_error)
++START_TEST(facund_object_bool_error)
+ {
+ 	/* Test errors are set/reset correctly */
+ 	test_object_error(bool);
+@@ -181,7 +181,7 @@
+ /*
+  * Tests for an integer facund_object
+  */
+-START_TEST(pkg_freebsd_object_int_null)
++START_TEST(facund_object_int_null)
+ {
+ 	/* Test if int functions will fail correctly when passes NULL */
+ 	fail_unless(facund_object_set_int(NULL, -1) == -1, NULL);
+@@ -191,42 +191,42 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_create)
++START_TEST(facund_object_int_create)
+ {
+ 	/* Tests accessing an unassigned int will fail */
+ 	test_object_create(int, FACUND_INT, 0);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_zero)
++START_TEST(facund_object_int_zero)
+ {
+ 	/* Test accessing an object set to 0 will succeed */
+ 	test_object_assign(int, &quot;int&quot;, 0, &quot;0&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_zero_from_str)
++START_TEST(facund_object_int_zero_from_str)
+ {
+ 	/* Test accessing an object set to 0 from a string will succeed */
+ 	test_object_assign_from_string(int, &quot;int&quot;, 0, &quot;0&quot;, &quot;0&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_min)
++START_TEST(facund_object_int_min)
+ {
+ 	/* Test accessing an object set to -2147483648 will succeed */
+ 	test_object_assign(int, &quot;int&quot;, INT32_MIN, &quot;-2147483648&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_min_from_str)
++START_TEST(facund_object_int_min_from_str)
+ {
+ 	test_object_assign_from_string(int, &quot;int&quot;, INT32_MIN, &quot;-2147483648&quot;,
+ 	    &quot;-2147483648&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_bad_min_from_str)
++START_TEST(facund_object_int_bad_min_from_str)
+ {
+ 	struct facund_object *obj;
+ 
+@@ -245,21 +245,21 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_max)
++START_TEST(facund_object_int_max)
+ {
+ 	/* Test accessing an object set to 2147483647 will succeed */
+ 	test_object_assign(int, &quot;int&quot;, INT32_MAX, &quot;2147483647&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_max_from_str)
++START_TEST(facund_object_int_max_from_str)
+ {
+ 	test_object_assign_from_string(int, &quot;int&quot;, INT32_MAX, &quot;2147483647&quot;,
+ 	    &quot;2147483647&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_bad_max_from_str)
++START_TEST(facund_object_int_bad_max_from_str)
+ {
+ 	struct facund_object *obj;
+ 
+@@ -278,7 +278,7 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_bad_from_str)
++START_TEST(facund_object_int_bad_from_str)
+ {
+ 	struct facund_object *obj;
+ 
+@@ -297,7 +297,7 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_int_error)
++START_TEST(facund_object_int_error)
+ {
+ 	/* Test errors are set/reset correctly */
+ 	test_object_error(int);
+@@ -314,7 +314,7 @@
+ /*
+  * Tests for an unsigned integer facund_object
+  */
+-START_TEST(pkg_freebsd_object_uint_null)
++START_TEST(facund_object_uint_null)
+ {
+ 	/* Test if uint functions will fail correctly when passes NULL */
+ 	fail_unless(facund_object_set_uint(NULL, 0) == -1, NULL);
+@@ -323,27 +323,27 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_create)
++START_TEST(facund_object_uint_create)
+ {
+ 	/* Test accessing an unassigned unsigned int will fail */
+ 	test_object_create(uint, FACUND_UINT, 0);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_min)
++START_TEST(facund_object_uint_min)
+ {
+ 	/* Test accessing an object set to 0 will succeed */
+ 	test_object_assign(uint, &quot;unsigned int&quot;, 0, &quot;0&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_min_from_str)
++START_TEST(facund_object_uint_min_from_str)
+ {
+ 	test_object_assign_from_string(uint, &quot;unsigned int&quot;, 0, &quot;0&quot;, &quot;0&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_bad_min_from_str)
++START_TEST(facund_object_uint_bad_min_from_str)
+ {
+ 	struct facund_object *obj;
+ 
+@@ -362,21 +362,21 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_max)
++START_TEST(facund_object_uint_max)
+ {
+ 	/* Test accessing an object set to 4294967295 will succeed */
+ 	test_object_assign(uint, &quot;unsigned int&quot;, UINT32_MAX, &quot;4294967295&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_max_from_str)
++START_TEST(facund_object_uint_max_from_str)
+ {
+ 	test_object_assign_from_string(uint, &quot;unsigned int&quot;, UINT32_MAX,
+ 	    &quot;4294967295&quot;, &quot;4294967295&quot;);
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_bad_max_from_str)
++START_TEST(facund_object_uint_bad_max_from_str)
+ {
+ 	struct facund_object *obj;
+ 
+@@ -395,7 +395,7 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_bad_from_str)
++START_TEST(facund_object_uint_bad_from_str)
+ {
+ 	struct facund_object *obj;
+ 
+@@ -414,7 +414,7 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_uint_error)
++START_TEST(facund_object_uint_error)
+ {
+ 	/* Test errors are set/reset correctly */
+ 	test_object_error(uint);
+@@ -430,7 +430,7 @@
+ /*
+  * Tests for a string facund_object
+  */
+-START_TEST(pkg_freebsd_object_string_null)
++START_TEST(facund_object_string_null)
+ {
+ 	/* Test if string functions will fail correctly when passes NULL */
+ 	fail_unless(facund_object_set_string(NULL, NULL) == -1, NULL);
+@@ -439,7 +439,7 @@
+ }
+ END_TEST
+ 
+-START_TEST(pkg_freebsd_object_string_create)
++START_TEST(facund_object_string_create)
+ {
+ 	/* Test accessing an unassigned string will fail */
+ 	test_object_create(string, FACUND_STRING, 0);
+@@ -460,46 +460,46 @@
+ 	s = suite_create(&quot;facund_object&quot;);
+ 
+ 	tc = tcase_create(&quot;boolean&quot;);
+-	tcase_add_test(tc, pkg_freebsd_object_bool_null);
+-	tcase_add_test(tc, pkg_freebsd_object_bool_create);
+-	tcase_add_test(tc, pkg_freebsd_object_bool_true);
+-	tcase_add_test(tc, pkg_freebsd_object_bool_false);
+-	tcase_add_test(tc, pkg_freebsd_object_bool_true_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_bool_false_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_bool_error);
++	tcase_add_test(tc, facund_object_bool_null);
++	tcase_add_test(tc, facund_object_bool_create);
++	tcase_add_test(tc, facund_object_bool_true);
++	tcase_add_test(tc, facund_object_bool_false);
++	tcase_add_test(tc, facund_object_bool_true_from_str);
++	tcase_add_test(tc, facund_object_bool_false_from_str);
++	tcase_add_test(tc, facund_object_bool_error);
+ 	suite_add_tcase(s, tc);
+ 
+ 	tc = tcase_create(&quot;integer&quot;);
+-	tcase_add_test(tc, pkg_freebsd_object_int_null);
+-	tcase_add_test(tc, pkg_freebsd_object_int_create);
+-	tcase_add_test(tc, pkg_freebsd_object_int_zero);
+-	tcase_add_test(tc, pkg_freebsd_object_int_zero_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_int_min);
+-	tcase_add_test(tc, pkg_freebsd_object_int_min_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_int_bad_min_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_int_max);
+-	tcase_add_test(tc, pkg_freebsd_object_int_max_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_int_bad_max_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_int_bad_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_int_error);
++	tcase_add_test(tc, facund_object_int_null);
++	tcase_add_test(tc, facund_object_int_create);
++	tcase_add_test(tc, facund_object_int_zero);
++	tcase_add_test(tc, facund_object_int_zero_from_str);
++	tcase_add_test(tc, facund_object_int_min);
++	tcase_add_test(tc, facund_object_int_min_from_str);
++	tcase_add_test(tc, facund_object_int_bad_min_from_str);
++	tcase_add_test(tc, facund_object_int_max);
++	tcase_add_test(tc, facund_object_int_max_from_str);
++	tcase_add_test(tc, facund_object_int_bad_max_from_str);
++	tcase_add_test(tc, facund_object_int_bad_from_str);
++	tcase_add_test(tc, facund_object_int_error);
+ 	suite_add_tcase(s, tc);
+ 
+ 	tc = tcase_create(&quot;unsigned integer&quot;);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_null);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_create);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_min);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_min_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_bad_min_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_max);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_max_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_bad_max_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_bad_from_str);
+-	tcase_add_test(tc, pkg_freebsd_object_uint_error);
++	tcase_add_test(tc, facund_object_uint_null);
++	tcase_add_test(tc, facund_object_uint_create);
++	tcase_add_test(tc, facund_object_uint_min);
++	tcase_add_test(tc, facund_object_uint_min_from_str);
++	tcase_add_test(tc, facund_object_uint_bad_min_from_str);
++	tcase_add_test(tc, facund_object_uint_max);
++	tcase_add_test(tc, facund_object_uint_max_from_str);
++	tcase_add_test(tc, facund_object_uint_bad_max_from_str);
++	tcase_add_test(tc, facund_object_uint_bad_from_str);
++	tcase_add_test(tc, facund_object_uint_error);
+ 	suite_add_tcase(s, tc);
+ 
+ 	tc = tcase_create(&quot;string&quot;);
+-	tcase_add_test(tc, pkg_freebsd_object_string_null);
+-	tcase_add_test(tc, pkg_freebsd_object_string_create);
++	tcase_add_test(tc, facund_object_string_null);
++	tcase_add_test(tc, facund_object_string_create);
+ 	suite_add_tcase(s, tc);
+ 
+ 	return s;
+
+Added: trunk/lib/test/test_facund_response.c
+===================================================================
+--- trunk/lib/test/test_facund_response.c	2007-08-29 03:05:24 UTC (rev 10)
++++ trunk/lib/test/test_facund_response.c	2007-08-29 05:50:57 UTC (rev 11)
+@@ -0,0 +1,124 @@
++/*
++ * Copyright (C) 2007 Andrew Turner
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ */
++
++#include &quot;test.h&quot;
++
++#include &lt;facund_object.h&gt;
++#include &lt;facund_response.h&gt;
++
++#include &lt;string.h&gt;
++
++START_TEST(facund_response_null)
++{
++	fail_unless(facund_response_new(NULL, RESP_GOOD, NULL, NULL) == NULL,
++	    NULL);
++	fail_unless(facund_response_new(&quot;id&quot;, RESP_GOOD, NULL, NULL) == NULL,
++	    NULL);
++}
++END_TEST
++
++START_TEST(facund_response_correct)
++{
++	struct facund_response *resp;
++
++	fail_unless((resp = facund_response_new(&quot;id&quot;, RESP_GOOD, &quot;msg&quot;, NULL))
++	    != NULL, NULL);
++	fail_unless(strcmp(
++	    &quot;&lt;response id=\&quot;id\&quot; code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&lt;/response&gt;&quot;,
++	    facund_response_string(resp)) == 0, NULL);
++	facund_response_free(resp);
++}
++END_TEST
++
++START_TEST(facund_response_correct_data)
++{
++	struct facund_response *resp;
++	struct facund_object *obj;
++
++	fail_unless((obj = facund_object_new_bool()) != NULL, NULL);
++	facund_object_set_bool(obj, 0);
++
++	fail_unless((resp = facund_response_new(&quot;id&quot;, RESP_GOOD, &quot;msg&quot;, obj))
++	    != NULL, NULL);
++	fail_unless(strcmp(
++	    &quot;&lt;response id=\&quot;id\&quot; code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&quot;
++	    &quot;&lt;data type=\&quot;bool\&quot;&gt;false&lt;/data&gt;&lt;/response&gt;&quot;,
++	    facund_response_string(resp)) == 0, NULL);
++	facund_response_free(resp);
++}
++END_TEST
++
++START_TEST(facund_response_correct_no_id)
++{
++	struct facund_response *resp;
++
++	fail_unless((resp = facund_response_new(NULL, RESP_GOOD, &quot;msg&quot;, NULL))
++	    != NULL, NULL);
++	fail_unless(strcmp(
++	    &quot;&lt;response code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&lt;/response&gt;&quot;,
++	    facund_response_string(resp)) == 0, NULL);
++	facund_response_free(resp);
++}
++END_TEST
++
++START_TEST(facund_response_correct_no_id_data)
++{
++	struct facund_response *resp;
++	struct facund_object *obj;
++
++	fail_unless((obj = facund_object_new_bool()) != NULL, NULL);
++	facund_object_set_bool(obj, 0);
++
++	fail_unless((resp = facund_response_new(NULL, RESP_GOOD, &quot;msg&quot;, obj))
++	    != NULL, NULL);
++	fail_unless(strcmp(
++	    &quot;&lt;response code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&quot;
++	    &quot;&lt;data type=\&quot;bool\&quot;&gt;false&lt;/data&gt;&lt;/response&gt;&quot;,
++	    facund_response_string(resp)) == 0, NULL);
++	facund_response_free(resp);
++}
++END_TEST
++
++Suite *
++facund_response_suite()
++{
++	Suite *s;
++	TCase *tc;
++
++	s = suite_create(&quot;facund_response&quot;);
++
++	tc = tcase_create(&quot;response&quot;);
++	tcase_add_test(tc, facund_response_null);
++	tcase_add_test(tc, facund_response_correct);
++	tcase_add_test(tc, facund_response_correct_data);
++	tcase_add_test(tc, facund_response_correct_no_id);
++	tcase_add_test(tc, facund_response_correct_no_id_data);
++	suite_add_tcase(s, tc);
++
++	return s;
++}
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000004.html">r10 - trunk/lib/test
+</A></li>
+	<LI>Next message: <A HREF="000006.html">r12 - trunk/lib
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#5">[ date ]</a>
+              <a href="thread.html#5">[ thread ]</a>
+              <a href="subject.html#5">[ subject ]</a>
+              <a href="author.html#5">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>

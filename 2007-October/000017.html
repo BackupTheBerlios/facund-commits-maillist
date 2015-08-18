@@ -1,0 +1,362 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r23 - trunk/frontend/facund
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r23%20-%20trunk/frontend/facund&In-Reply-To=%3C200710070339.l973dFUG022573%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000016.html">
+   <LINK REL="Next"  HREF="000018.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r23 - trunk/frontend/facund</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r23%20-%20trunk/frontend/facund&In-Reply-To=%3C200710070339.l973dFUG022573%40sheep.berlios.de%3E"
+       TITLE="r23 - trunk/frontend/facund">zxombie at users.berlios.de
+       </A><BR>
+    <I>Sun Oct  7 05:39:15 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000016.html">r22 - trunk/frontend/facund
+</A></li>
+        <LI>Next message: <A HREF="000018.html">r24 - in trunk/frontend/facund: . gui network
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#17">[ date ]</a>
+              <a href="thread.html#17">[ thread ]</a>
+              <a href="subject.html#17">[ subject ]</a>
+              <a href="author.html#17">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-10-07 05:39:07 +0200 (Sun, 07 Oct 2007)
+New Revision: 23
+
+Modified:
+   trunk/frontend/facund/data.py
+Log:
+Document facund object classes and add examples to use as tests
+
+Modified: trunk/frontend/facund/data.py
+===================================================================
+--- trunk/frontend/facund/data.py	2007-10-07 01:12:45 UTC (rev 22)
++++ trunk/frontend/facund/data.py	2007-10-07 03:39:07 UTC (rev 23)
+@@ -27,44 +27,138 @@
+ import struct
+ 
+ class Object:
++	'''
++	A Facund object is the basic data type that can be sent
++	between the client and server. Most methods can be used
++	with all children objects. The only exception is setData()
++	can not be used with an Array.
++	
++	Do not use Object directly,
++	rather use one of the base classes.
++	'''
+ 	def __init__(self, type):
+ 		self.__parent = None
+ 		self.__data = None
+ 		self.__type = type
+ 
+ 	def __str__(self):
+-		'''Get the XML string for the current object'''
++		'''
++		Get the XML string for the current object.
++
++		&gt;&gt;&gt; str(Bool(False))
++		'&lt;data type=&quot;bool&quot;&gt;False&lt;/data&gt;'
++
++		&gt;&gt;&gt; str(Int(10))
++		'&lt;data type=&quot;int&quot;&gt;10&lt;/data&gt;'
++
++		&gt;&gt;&gt; str(String('Hello'))
++		'&lt;data type=&quot;string&quot;&gt;Hello&lt;/data&gt;'
++		'''
+ 		if self.__data is None:
+ 			raise ValueError(&quot;No value set&quot;)
+ 		return &quot;&lt;data type=\&quot;%s\&quot;&gt;%s&lt;/data&gt;&quot; % \
+-		    (self.__type, str(self.getData()).lower())
++		    (self.__type, str(self.getData()))
+ 		
+ 	def setParent(self, parent):
++		'''
++		Sets the object's parent. This is used with arrays and
++		shouldn't be used by the end user.
++		'''
+ 		self.__parent = parent
+ 
+ 	def getParent(self):
++		'''
++		Returns the parent object when the current object is part
++		of an array.
++
++		&gt;&gt;&gt; a = Array()
++		&gt;&gt;&gt; b = Bool()
++		&gt;&gt;&gt; a.append(b)
++		&gt;&gt;&gt; b.getParent() is a
++		True
++
++		&gt;&gt;&gt; UnsignedInt(10).getParent() is None
++		True
++		'''
+ 		return self.__parent
+ 
+ 	def setData(self, data):
+ 		self.__data = data
+ 
+ 	def getData(self):
++		'''
++		Returns the value of the data stored in the object
++
++		&gt;&gt;&gt; String(&quot;Hello World&quot;).getData()
++		'Hello World'
++		'''
+ 		return self.__data
+ 
+ 	def getType(self):
++		'''
++		Returns a string containing the type of data stored
++
++		&gt;&gt;&gt; Array().getType()
++		'array'
++		'''
+ 		return self.__type
+ 
+ class Bool(Object):
++	'''
++	Creates a boolean Facund Object
++
++	&gt;&gt;&gt; Bool().getType()
++	'bool'
++
++	The value of a Bool can be retrieved with getData().
++	It is true for all values where str(value) is True.
++	&gt;&gt;&gt; Bool(True).getData()
++	True
++
++	As the Bool class assumes any data that
++	is not true is false this is valid:
++	&gt;&gt;&gt; Bool('Bad String').getData()
++	False
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, &quot;bool&quot;)
+ 		if data is not None:
+ 			self.setData(data)
+ 
+ 	def setData(self, data):
++		'''
++		Updates the value of a boolean
++
++		The data can be True:
++		&gt;&gt;&gt; b = Bool()
++		&gt;&gt;&gt; b.setData('True')
++		&gt;&gt;&gt; b.getData()
++		True
++
++		Or the data can be anything else for false:
++		&gt;&gt;&gt; b = Bool()
++		&gt;&gt;&gt; b.setData('Foo')
++		&gt;&gt;&gt; b.getData()
++		False
++
++		setData can also be used to change the value of an object:
++		&gt;&gt;&gt; b = Bool(True)
++		&gt;&gt;&gt; b.getData()
++		True
++		&gt;&gt;&gt; b.setData(False)
++		&gt;&gt;&gt; b.getData()
++		False
++		'''
+ 		data = str(data).lower()
+ 		Object.setData(self, data == 'true')
+ 
+ class Int(Object):
++	'''
++	An object to holds a 32 bit signed int
++
++	&gt;&gt;&gt; Int(-1024).getType()
++	'int'
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, &quot;int&quot;)
+ 		self.__min = (-0x7fffffff-1)
+@@ -73,12 +167,26 @@
+ 			self.setData(data)
+ 
+ 	def setData(self, data):
++		'''
++		Updates the value of an integer
++
++		&gt;&gt;&gt; i = Int(100)
++		&gt;&gt;&gt; i.setData(-200)
++		&gt;&gt;&gt; i.getData()
++		-200
++		'''
+ 		data = int(data)
+ 		if data &lt; self.__min or data &gt; self.__max:
+ 			raise ValueError(&quot;Out of range&quot;)
+ 		Object.setData(self, int(data))
+ 
+ class UnsignedInt(Object):
++	'''
++	An object to holds a 32 bit unsigned int
++
++	&gt;&gt;&gt; UnsignedInt(1024).getType()
++	'unsigned int'
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, &quot;unsigned int&quot;)
+ 		self.__min = 0
+@@ -87,26 +195,63 @@
+ 			self.setData(data)
+ 
+ 	def setData(self, data):
++		'''
++		Updates the value of an unsigned integer
++
++		&gt;&gt;&gt; u = UnsignedInt(100)
++		&gt;&gt;&gt; u.setData(200)
++		&gt;&gt;&gt; u.getData()
++		200
++		'''
+ 		data = int(data)
+ 		if data &lt; self.__min or data &gt; self.__max:
+ 			raise ValueError(&quot;Out of range&quot;)
+ 		Object.setData(self, int(data))
+ 
+ class String(Object):
++	'''
++	An object to holds a string of characters
++
++	&gt;&gt;&gt; String('Hello World').getType()
++	'string'
++	'''
+ 	def __init__(self, data = None):
+ 		Object.__init__(self, &quot;string&quot;)
+ 		if data is not None:
+ 			self.setData(data)
+ 		
+ 	def setData(self, data):
++		'''
++		Updates the value of a string
++
++		&gt;&gt;&gt; s = String('Hello World')
++		&gt;&gt;&gt; s.setData('Goodbye cruel world')
++		&gt;&gt;&gt; s.getData()
++		'Goodbye cruel world'
++		'''
+ 		Object.setData(self, str(data))
+ 
+ class Array(Object):
++	'''
++	An object containing other objects in an order.
++
++	&gt;&gt;&gt; Array().getType()
++	'array'
++	'''
+ 	def __init__(self):
+ 		Object.__init__(self, &quot;array&quot;)
+ 		self.__data = []
+ 
+ 	def __str__(self):
++		'''
++		Returns an XML string containing the array objects
++
++		&gt;&gt;&gt; a = Array()
++		&gt;&gt;&gt; b = Bool(True)
++		&gt;&gt;&gt; a.append(b)
++		&gt;&gt;&gt; str(a)
++		'&lt;data type=&quot;array&quot;&gt;&lt;data type=&quot;bool&quot;&gt;True&lt;/data&gt;&lt;/data&gt;'
++		'''
+ 		s = &quot;&lt;data type=\&quot;array\&quot;&gt;&quot;
+ 		for data in self.__data:
+ 			s += str(data)
+@@ -114,15 +259,53 @@
+ 		return s
+ 
+ 	def append(self, data):
+-		'''Appends the data to the end of the array'''
++		'''
++		Appends the data to the end of the array.
++
++		&gt;&gt;&gt; a = Array()
++		&gt;&gt;&gt; b = Bool(True)
++		&gt;&gt;&gt; a.append(b)
++		&gt;&gt;&gt; i = Int(-10)
++		&gt;&gt;&gt; a.append(i)
++		&gt;&gt;&gt; a.getData()[0] is b
++		True
++		&gt;&gt;&gt; a.getData()[1] is i
++		True
++		'''
+ 		if not isinstance(data, Object):
+ 			raise ValueError(&quot;Not a Faund Object&quot;)
+ 		self.__data.append(data)
+ 		data.setParent(self)
+ 
+ 	def getData(self):
++		'''
++		Gets a Python array of the objects in the facund Array
++
++		&gt;&gt;&gt; a = Array()
++		&gt;&gt;&gt; u = UnsignedInt(300)
++		&gt;&gt;&gt; a.append(u)
++		&gt;&gt;&gt; ar = a.getData()
++		&gt;&gt;&gt; type(ar)
++		&lt;type 'list'&gt;
++		&gt;&gt;&gt; ar[0] is u
++		True
++		'''
+ 		return self.__data
+ 
+ 	def setData(self, data):
++		'''
++		&gt;&gt;&gt; a = Array()
++		&gt;&gt;&gt; try:
++		... 	a.setData(None)
++		... except ValueError, e:
++		... 	print e
++		Array's can't have data set
++		'''
+ 		raise ValueError(&quot;Array's can't have data set&quot;)
+ 
++def _test():
++	import doctest
++	doctest.testmod()
++
++if __name__ == &quot;__main__&quot;:
++	_test()
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000016.html">r22 - trunk/frontend/facund
+</A></li>
+	<LI>Next message: <A HREF="000018.html">r24 - in trunk/frontend/facund: . gui network
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#17">[ date ]</a>
+              <a href="thread.html#17">[ thread ]</a>
+              <a href="subject.html#17">[ subject ]</a>
+              <a href="author.html#17">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>

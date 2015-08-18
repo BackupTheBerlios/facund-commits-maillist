@@ -1,0 +1,127 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r12 - trunk/lib
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r12%20-%20trunk/lib&In-Reply-To=%3C200708290553.l7T5rq44000629%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000005.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r12 - trunk/lib</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r12%20-%20trunk/lib&In-Reply-To=%3C200708290553.l7T5rq44000629%40sheep.berlios.de%3E"
+       TITLE="r12 - trunk/lib">zxombie at users.berlios.de
+       </A><BR>
+    <I>Wed Aug 29 07:53:52 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000005.html">r11 - trunk/lib/test
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#6">[ date ]</a>
+              <a href="thread.html#6">[ thread ]</a>
+              <a href="subject.html#6">[ subject ]</a>
+              <a href="author.html#6">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-08-29 07:53:46 +0200 (Wed, 29 Aug 2007)
+New Revision: 12
+
+Modified:
+   trunk/lib/facund_response.c
+   trunk/lib/facund_response.h
+Log:
+Remove facund_response_set_id as it was unused 
+Fix facund_response_new when no id is set
+
+
+Modified: trunk/lib/facund_response.c
+===================================================================
+--- trunk/lib/facund_response.c	2007-08-29 05:50:57 UTC (rev 11)
++++ trunk/lib/facund_response.c	2007-08-29 05:53:46 UTC (rev 12)
+@@ -53,6 +53,10 @@
+ {
+ 	struct facund_response *resp;
+ 
++	if (message == NULL) {
++		return NULL;
++	}
++
+ 	resp = calloc(1, sizeof(struct facund_response));
+ 	if (resp == NULL)
+ 		return NULL;
+@@ -63,7 +67,7 @@
+ 	resp-&gt;resp_code = code;
+ 	resp-&gt;resp_msg = strdup(message);
+ 	resp-&gt;resp_return = obj;
+-	if (resp-&gt;resp_id == NULL || resp-&gt;resp_msg == NULL) {
++	if ((id != NULL &amp;&amp; resp-&gt;resp_id == NULL) || resp-&gt;resp_msg == NULL) {
+ 		facund_response_free(resp);
+ 		return NULL;
+ 	}
+@@ -71,16 +75,6 @@
+ 	return resp;
+ }
+ 
+-int
+-facund_response_set_id(struct facund_response *resp, const char *id)
+-{
+-	if (resp == NULL || id == NULL) {
+-		return -1;
+-	}
+-
+-	return -1;
+-}
+-
+ /*
+  * Gets a string to send to the client
+  */
+
+Modified: trunk/lib/facund_response.h
+===================================================================
+--- trunk/lib/facund_response.h	2007-08-29 05:50:57 UTC (rev 11)
++++ trunk/lib/facund_response.h	2007-08-29 05:53:46 UTC (rev 12)
+@@ -51,8 +51,6 @@
+ 
+ struct facund_response	*facund_response_new(const char *, facund_response_code,
+ 			    const char *, struct facund_object *);
+-int			 facund_response_set_id(struct facund_response *,
+-			    const char *);
+ const char		*facund_response_string(struct facund_response *);
+ void			 facund_response_free(struct facund_response *);
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000005.html">r11 - trunk/lib/test
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#6">[ date ]</a>
+              <a href="thread.html#6">[ thread ]</a>
+              <a href="subject.html#6">[ subject ]</a>
+              <a href="author.html#6">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>

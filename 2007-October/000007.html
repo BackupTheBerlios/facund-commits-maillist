@@ -1,0 +1,510 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r13 - trunk/lib/test
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r13%20-%20trunk/lib/test&In-Reply-To=%3C200710061949.l96JnEwq008983%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="000008.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r13 - trunk/lib/test</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r13%20-%20trunk/lib/test&In-Reply-To=%3C200710061949.l96JnEwq008983%40sheep.berlios.de%3E"
+       TITLE="r13 - trunk/lib/test">zxombie at users.berlios.de
+       </A><BR>
+    <I>Sat Oct  6 21:49:14 CEST 2007</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="000008.html">r14 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-10-06 21:48:55 +0200 (Sat, 06 Oct 2007)
+New Revision: 13
+
+Added:
+   trunk/lib/test/test_facund_server.c
+Modified:
+   trunk/lib/test/Makefile
+   trunk/lib/test/main.c
+   trunk/lib/test/test.h
+   trunk/lib/test/test_facund_response.c
+Log:
+Add tests for the facund server
+
+
+Modified: trunk/lib/test/Makefile
+===================================================================
+--- trunk/lib/test/Makefile	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/Makefile	2007-10-06 19:48:55 UTC (rev 13)
+@@ -1,12 +1,12 @@
+ PROG=	tests
+ SRCS=	main.c test_facund_connection.c test_facund_object.c \
+-	test_facund_response.c
++	test_facund_response.c test_facund_server.c
+ 
+ WARNS?=		6
+ 
+ # libfacund
+ CFLAGS+=	-I${.CURDIR}/..
+-LDADD+=		${.OBJDIR}/../libfacund.a
++LDADD+=		${.OBJDIR}/../libfacund.a -lbsdxml
+ 
+ # libcheck
+ CFLAGS+=	-I/usr/local/include
+
+Modified: trunk/lib/test/main.c
+===================================================================
+--- trunk/lib/test/main.c	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/main.c	2007-10-06 19:48:55 UTC (rev 13)
+@@ -38,6 +38,7 @@
+ 	sr = srunner_create(facund_connection_suite());
+ 	srunner_add_suite(sr, facund_object_suite());
+ 	srunner_add_suite(sr, facund_response_suite());
++	srunner_add_suite(sr, facund_server_suite());
+ 
+ 	srunner_run_all(sr, CK_NORMAL);
+ 	fail_count = srunner_ntests_failed(sr);
+
+Modified: trunk/lib/test/test.h
+===================================================================
+--- trunk/lib/test/test.h	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/test.h	2007-10-06 19:48:55 UTC (rev 13)
+@@ -33,5 +33,6 @@
+ Suite *facund_connection_suite(void);
+ Suite *facund_object_suite(void);
+ Suite *facund_response_suite(void);
++Suite *facund_server_suite(void);
+ 
+ #endif /* FACND_TEST_H */
+
+Modified: trunk/lib/test/test_facund_response.c
+===================================================================
+--- trunk/lib/test/test_facund_response.c	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/test_facund_response.c	2007-10-06 19:48:55 UTC (rev 13)
+@@ -50,6 +50,10 @@
+ 	fail_unless(strcmp(
+ 	    &quot;&lt;response id=\&quot;id\&quot; code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&lt;/response&gt;&quot;,
+ 	    facund_response_string(resp)) == 0, NULL);
++	fail_unless(facund_response_set_id(resp, &quot;foo&quot;) == 0, NULL);
++	fail_unless(strcmp(
++	    &quot;&lt;response id=\&quot;foo\&quot; code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&lt;/response&gt;&quot;,
++	    facund_response_string(resp)) == 0, NULL);
+ 	facund_response_free(resp);
+ }
+ END_TEST
+@@ -81,6 +85,10 @@
+ 	fail_unless(strcmp(
+ 	    &quot;&lt;response code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&lt;/response&gt;&quot;,
+ 	    facund_response_string(resp)) == 0, NULL);
++	fail_unless(facund_response_set_id(resp, &quot;foo&quot;) == 0, NULL);
++	fail_unless(strcmp(
++	    &quot;&lt;response id=\&quot;foo\&quot; code=\&quot;0\&quot; message=\&quot;msg\&quot;&gt;&lt;/response&gt;&quot;,
++	    facund_response_string(resp)) == 0, NULL);
+ 	facund_response_free(resp);
+ }
+ END_TEST
+
+Added: trunk/lib/test/test_facund_server.c
+===================================================================
+--- trunk/lib/test/test_facund_server.c	2007-08-29 05:53:46 UTC (rev 12)
++++ trunk/lib/test/test_facund_server.c	2007-10-06 19:48:55 UTC (rev 13)
+@@ -0,0 +1,358 @@
++/*
++ * Copyright (C) 2007 Andrew Turner
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ *
++ */
++
++#include &quot;test.h&quot;
++
++#include &lt;facund_connection.h&gt;
++#include &lt;facund_object.h&gt;
++#include &lt;facund_response.h&gt;
++
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++
++#define facund_server_pre(server_var, client_var) \
++do { \
++	/* Make sure the socket is removed */ \
++	system(&quot;rm -f /tmp/facund_test&quot;); \
++	fail_unless((server_var = facund_connect_server(&quot;/tmp/facund_test&quot;)) \
++	    != NULL, NULL); \
++	fail_unless((client_var = facund_connect_client(&quot;/tmp/facund_test&quot;)) \
++	    != NULL, NULL); \
++	fail_unless(facund_server_start(server_var, 0) == 0, NULL); \
++} while(0)
++
++#define facund_server_check_data(connection, data) \
++do { \
++	char readbuf[1024]; \
++	fail_unless(sizeof readbuf &gt; strlen(data), NULL); \
++	memset(readbuf, 0, sizeof readbuf); \
++	facund_recv(connection, readbuf, strlen(data)); \
++	fail_unless(strcmp(readbuf, data) == 0, \
++	    &quot;\nExpected: %s\n     Got: %s&quot;, data, readbuf); \
++} while (0)
++
++#define facund_server_test_empty_data(type) \
++do { \
++	struct facund_conn *conn_s, *conn_c; \
++	const char msg[] = &quot;&lt;facund-client version=\&quot;0\&quot;&gt;&quot; \
++	    &quot;&lt;call name=\&quot;foo\&quot; id=\&quot;1\&quot;&gt;&quot; \
++	    &quot;&lt;data type=\&quot;&quot;type&quot;\&quot;&gt;&lt;/data&gt;&quot; \
++	    &quot;&lt;/call&gt;&quot; \
++	    &quot;&lt;/facund-client&gt;&quot;; \
++	/* Connect */ \
++	facund_server_pre(conn_s, conn_c); \
++	/* Check we connected correctly */ \
++	facund_server_check_data(conn_c, &quot;&lt;facund-server version=\&quot;0\&quot;&gt;&quot;); \
++	/* Add a call handler and attempt to call it */ \
++	facund_dummy_cb_called = 0; \
++	fail_unless(facund_server_add_call(&quot;foo&quot;, facund_dummy_cb) == 0,NULL); \
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL); \
++	/* Parse the call */ \
++	fail_unless(facund_server_get_request(conn_s) == 0, NULL); \
++	/* Check it failed */ \
++	facund_server_check_data(conn_c, \
++	    &quot;&lt;response id=\&quot;1\&quot; code=\&quot;400\&quot; message=\&quot;Missing value\&quot;&gt;&quot; \
++	    &quot;&lt;/response&gt;&quot;); \
++	fail_unless(facund_dummy_cb_called == 0, NULL); \
++	fail_unless(facund_dummy_cb_obj_value == 0, NULL); \
++	fail_unless(facund_server_finish(conn_s) == 0, NULL); \
++	/* Check the server correctly closed the connection */ \
++	facund_server_check_data(conn_c, &quot;&lt;/facund-server&gt;&quot;); \
++	/* Disconnect */ \
++	facund_close(conn_c); \
++	facund_cleanup(conn_s); \
++} while(0)
++
++#define facund_server_test_bad_data(type, data) \
++do { \
++	struct facund_conn *conn_s, *conn_c; \
++	const char msg[] = &quot;&lt;facund-client version=\&quot;0\&quot;&gt;&quot; \
++	    &quot;&lt;call name=\&quot;foo\&quot; id=\&quot;1\&quot;&gt;&quot; \
++	    &quot;&lt;data type=\&quot;&quot;type&quot;\&quot;&gt;&quot;data&quot;&lt;/data&gt;&quot; \
++	    &quot;&lt;/call&gt;&quot; \
++	    &quot;&lt;/facund-client&gt;&quot;; \
++	/* Connect */ \
++	facund_server_pre(conn_s, conn_c); \
++	/* Check we connected correctly */ \
++	facund_server_check_data(conn_c, &quot;&lt;facund-server version=\&quot;0\&quot;&gt;&quot;); \
++	/* Add a call handler and attempt to call it */ \
++	facund_dummy_cb_called = 0; \
++	fail_unless(facund_server_add_call(&quot;foo&quot;, facund_dummy_cb) == 0,NULL); \
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL); \
++	/* Parse the call */ \
++	fail_unless(facund_server_get_request(conn_s) == 0, NULL); \
++	/* Check it succeeded */ \
++	facund_server_check_data(conn_c, \
++	    &quot;&lt;response id=\&quot;1\&quot; code=\&quot;401\&quot; message=\&quot;Invalid value\&quot;&gt;&quot; \
++	    &quot;&lt;/response&gt;&quot;); \
++	fail_unless(facund_dummy_cb_called == 0, NULL); \
++	fail_unless(facund_dummy_cb_obj_value == 0, NULL); \
++	fail_unless(facund_server_finish(conn_s) == 0, NULL); \
++	/* Check the server correctly closed the connection */ \
++	facund_server_check_data(conn_c, &quot;&lt;/facund-server&gt;&quot;); \
++	/* Disconnect */ \
++	facund_close(conn_c); \
++	facund_cleanup(conn_s); \
++} while (0)
++
++static struct facund_response *facund_dummy_cb(const char *,
++    struct facund_object *);
++
++static int facund_dummy_cb_called = 0;
++static int facund_dummy_cb_obj_value = 0;
++
++static struct facund_response *
++facund_dummy_cb(const char *id, struct facund_object *obj)
++{
++	struct facund_object *ret;
++
++	facund_dummy_cb_called = 1;
++	if (facund_object_get_type(obj) == FACUND_INT) {
++		facund_dummy_cb_obj_value = facund_object_get_int(obj);
++	} else {
++		facund_dummy_cb_obj_value = -1;
++	}
++	ret = facund_object_new_bool();
++	facund_object_set_bool(ret, 1);
++	return facund_response_new(id, RESP_GOOD, &quot;message&quot;, ret);
++}
++
++START_TEST(facund_server_null)
++{
++	fail_unless(facund_server_start(NULL, 0) == -1, NULL);
++	fail_unless(facund_server_get_request(NULL) == -1, NULL);
++	fail_unless(facund_server_finish(NULL) == -1, NULL);
++	fail_unless(facund_server_add_call(NULL, NULL) == -1, NULL);
++	fail_unless(facund_server_add_call(&quot;foo&quot;, NULL) == -1, NULL);
++	fail_unless(facund_server_add_call(NULL, facund_dummy_cb) == -1, NULL);
++}
++END_TEST
++
++/*
++ * Tests if the server will complain when adding a call with the same name
++ */
++START_TEST(facund_server_multiple_add_call)
++{
++	fail_unless(facund_server_add_call(&quot;foo&quot;, facund_dummy_cb) == 0, NULL);
++	fail_unless(facund_server_add_call(&quot;foo&quot;, facund_dummy_cb) == -1, NULL);
++}
++END_TEST
++
++/*
++ * Tests if the server sends the correct data when connecting/disconnecting
++ */
++START_TEST(facund_server_create)
++{
++	struct facund_conn *conn_s, *conn_c;
++
++	facund_server_pre(conn_s, conn_c);
++
++	/* Check the server correctly started the connection */
++	facund_server_check_data(conn_c, &quot;&lt;facund-server version=\&quot;0\&quot;&gt;&quot;);
++
++	fail_unless(facund_server_finish(conn_s) == 0, NULL);
++
++	/* Check the server correctly closed the connection */
++	facund_server_check_data(conn_c, &quot;&lt;/facund-server&gt;&quot;);
++	
++	facund_close(conn_c);
++	facund_cleanup(conn_s);
++}
++END_TEST
++
++/*
++ * Test if calls work as expected
++ */
++START_TEST(facund_server_call)
++{
++	struct facund_conn *conn_s, *conn_c;
++	const char msg[] = &quot;&lt;facund-client version=\&quot;0\&quot;&gt;&quot;
++	    &quot;&lt;call name=\&quot;foo\&quot; id=\&quot;1\&quot;&gt;&lt;data type=\&quot;int\&quot;&gt;10&lt;/data&gt;&lt;/call&gt;&quot;
++	    &quot;&lt;/facund-client&gt;&quot;;
++	char buf[1024];
++
++	memset(buf, 0, sizeof buf);
++
++	/* Connect */
++	facund_server_pre(conn_s, conn_c);
++
++	/* Check we connected correctly */
++	facund_server_check_data(conn_c, &quot;&lt;facund-server version=\&quot;0\&quot;&gt;&quot;);
++
++	/* Add a call handler and attempt to call it */
++	facund_dummy_cb_called = 0;
++	fail_unless(facund_server_add_call(&quot;foo&quot;, facund_dummy_cb) == 0, NULL);
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL);
++
++	/* Parse the call */
++	fail_unless(facund_server_get_request(conn_s) == 0, NULL);
++
++	/* Check it succeeded */
++	facund_server_check_data(conn_c,
++	    &quot;&lt;response id=\&quot;1\&quot; code=\&quot;0\&quot; message=\&quot;message\&quot;&gt;&quot;
++	    &quot;&lt;data type=\&quot;bool\&quot;&gt;true&lt;/data&gt;&lt;/response&gt;&quot;);
++	fail_unless(facund_dummy_cb_called == 1, NULL);
++	fail_unless(facund_dummy_cb_obj_value == 10, NULL);
++
++	fail_unless(facund_server_finish(conn_s) == 0, NULL);
++
++	/* Check the server correctly closed the connection */
++	facund_server_check_data(conn_c, &quot;&lt;/facund-server&gt;&quot;);
++
++	/* Disconnect */
++	facund_close(conn_c);
++	facund_cleanup(conn_s);
++}
++END_TEST
++
++/*
++ * Test if calls work as expected when the call is missing
++ */
++START_TEST(facund_server_call_missing)
++{
++	struct facund_conn *conn_s, *conn_c;
++	const char msg[] = &quot;&lt;facund-client version=\&quot;0\&quot;&gt;&quot;
++	    &quot;&lt;call name=\&quot;foo\&quot; id=\&quot;1\&quot;&gt;&lt;data type=\&quot;int\&quot;&gt;10&lt;/data&gt;&lt;/call&gt;&quot;
++	    &quot;&lt;/facund-client&gt;&quot;;
++	char buf[1024];
++
++	memset(buf, 0, sizeof buf);
++
++	/* Connect */
++	facund_server_pre(conn_s, conn_c);
++
++	/* Check we connected correctly */
++	facund_server_check_data(conn_c, &quot;&lt;facund-server version=\&quot;0\&quot;&gt;&quot;);
++
++	/* Add a call handler and attempt to call it */
++	facund_dummy_cb_called = 0;
++	fail_unless(facund_send(conn_c, msg, sizeof msg) == sizeof msg, NULL);
++
++	/* Parse the call */
++	facund_server_get_request(conn_s);
++
++	/* Check it succeeded */
++	facund_server_check_data(conn_c,
++	    &quot;&lt;response id=\&quot;1\&quot; code=\&quot;300\&quot; message=\&quot;Unknown call\&quot;&gt;&quot;
++	    &quot;&lt;/response&gt;&quot;);
++	fail_unless(facund_dummy_cb_called == 0, NULL);
++	fail_unless(facund_dummy_cb_obj_value == 0, NULL);
++
++	fail_unless(facund_server_finish(conn_s) == 0, NULL);
++
++	/* Check the server correctly closed the connection */
++	facund_server_check_data(conn_c, &quot;&lt;/facund-server&gt;&quot;);
++
++	/* Disconnect */
++	facund_close(conn_c);
++	facund_cleanup(conn_s);
++}
++END_TEST
++
++/* Test if calls work as expected with an empty bool */
++START_TEST(facund_server_call_empty_bool)
++{
++	facund_server_test_empty_data(&quot;bool&quot;);
++}
++END_TEST
++
++/* Test if calls work as expected with an empty int */
++START_TEST(facund_server_call_empty_int)
++{
++	facund_server_test_empty_data(&quot;int&quot;);
++}
++END_TEST
++
++/* Test if calls work as expected with an invalid int */
++START_TEST(facund_server_call_bad_int)
++{
++	facund_server_test_bad_data(&quot;int&quot;, &quot;foo&quot;);
++}
++END_TEST
++
++/* Test if calls work as expected with an empty unsigned int */
++START_TEST(facund_server_call_empty_uint)
++{
++	facund_server_test_empty_data(&quot;unsigned int&quot;);
++}
++END_TEST
++
++/* Test if calls work as expected with an invalid unsigned int */
++START_TEST(facund_server_call_bad_uint)
++{
++	facund_server_test_bad_data(&quot;unsigned int&quot;, &quot;foo&quot;);
++}
++END_TEST
++
++/* Test if calls work as expected with an empty string */
++START_TEST(facund_server_call_empty_string)
++{
++	facund_server_test_empty_data(&quot;string&quot;);
++}
++END_TEST
++
++/* Test if calls work as expected with an empty array */
++START_TEST(facund_server_call_empty_array)
++{
++	facund_server_test_empty_data(&quot;array&quot;);
++}
++END_TEST
++
++/* Test if calls work as expected with an invalid array */
++START_TEST(facund_server_call_bad_array)
++{
++	facund_server_test_bad_data(&quot;array&quot;, &quot;foo&quot;);
++}
++END_TEST
++
++Suite *
++facund_server_suite()
++{
++	Suite *s;
++	TCase *tc;
++
++	s = suite_create(&quot;facund_server&quot;);
++
++	tc = tcase_create(&quot;server&quot;);
++	tcase_add_test(tc, facund_server_null);
++	tcase_add_test(tc, facund_server_multiple_add_call);
++	tcase_add_test(tc, facund_server_create);
++	tcase_add_test(tc, facund_server_call);
++	tcase_add_test(tc, facund_server_call_missing);
++	tcase_add_test(tc, facund_server_call_empty_bool);
++	tcase_add_test(tc, facund_server_call_empty_int);
++	tcase_add_test(tc, facund_server_call_bad_int);
++	tcase_add_test(tc, facund_server_call_empty_uint);
++	tcase_add_test(tc, facund_server_call_bad_uint);
++	tcase_add_test(tc, facund_server_call_empty_string);
++	tcase_add_test(tc, facund_server_call_empty_array);
++	tcase_add_test(tc, facund_server_call_bad_array);
++	suite_add_tcase(s, tc);
++
++	return s;
++}
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="000008.html">r14 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,111 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> r9 - trunk/lib
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/facund-commits/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r9%20-%20trunk/lib&In-Reply-To=%3C200708290224.l7T2OglD011569%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000002.html">
+   <LINK REL="Next"  HREF="000004.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>r9 - trunk/lib</H1>
+    <B>zxombie at users.berlios.de</B> 
+    <A HREF="mailto:facund-commits%40lists.berlios.de?Subject=Re%3A%20r9%20-%20trunk/lib&In-Reply-To=%3C200708290224.l7T2OglD011569%40sheep.berlios.de%3E"
+       TITLE="r9 - trunk/lib">zxombie at users.berlios.de
+       </A><BR>
+    <I>Wed Aug 29 04:24:42 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000002.html">r8 - trunk/lib/test
+</A></li>
+        <LI>Next message: <A HREF="000004.html">r10 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3">[ date ]</a>
+              <a href="thread.html#3">[ thread ]</a>
+              <a href="subject.html#3">[ subject ]</a>
+              <a href="author.html#3">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: zxombie
+Date: 2007-08-29 04:24:35 +0200 (Wed, 29 Aug 2007)
+New Revision: 9
+
+Modified:
+   trunk/lib/facund_connection.c
+Log:
+Don't seg fault on a NULL string
+
+Modified: trunk/lib/facund_connection.c
+===================================================================
+--- trunk/lib/facund_connection.c	2007-08-29 02:20:15 UTC (rev 8)
++++ trunk/lib/facund_connection.c	2007-08-29 02:24:35 UTC (rev 9)
+@@ -29,6 +29,7 @@
+ #include &lt;sys/socket.h&gt;
+ #include &lt;sys/un.h&gt;
+ 
++#include &lt;assert.h&gt;
+ #include &lt;err.h&gt;
+ #include &lt;errno.h&gt;
+ #include &lt;stdio.h&gt;
+@@ -49,6 +50,7 @@
+ {
+ 	struct facund_conn *conn;
+ 
++	assert(sock != NULL);
+ 	conn = calloc(1, sizeof(struct facund_conn));
+ 	if (conn == NULL) {
+ 		return NULL;
+@@ -79,6 +81,9 @@
+ {
+ 	struct facund_conn *conn;
+ 
++	if (sock == NULL) {
++		return NULL;
++	}
+ 	conn = facund_create(sock);
+ 	if (conn == NULL) {
+ 		return NULL;
+@@ -109,6 +114,9 @@
+ {
+ 	struct facund_conn *conn;
+ 
++	if (s == NULL) {
++		return NULL;
++	}
+ 	conn = facund_create(s);
+ 	if (conn == NULL) {
+ 		return NULL;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000002.html">r8 - trunk/lib/test
+</A></li>
+	<LI>Next message: <A HREF="000004.html">r10 - trunk/lib/test
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3">[ date ]</a>
+              <a href="thread.html#3">[ thread ]</a>
+              <a href="subject.html#3">[ subject ]</a>
+              <a href="author.html#3">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/facund-commits">More information about the Facund-commits
+mailing list</a><br>
+</body></html>
